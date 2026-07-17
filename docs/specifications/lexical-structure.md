@@ -2,9 +2,9 @@
 
 ## Status
 
-**Specified for M1; not implemented.** This document is the observable contract
-for the first source-to-token slice. Tokenization does not imply that later
-parser, checker, or emitter phases accept a construct.
+**Implemented in M1.** This document is the observable contract for the first
+source-to-token slice. Tokenization does not imply that later parser, checker,
+or emitter phases accept a construct.
 
 ## Source text and positions
 
@@ -183,8 +183,8 @@ Example:
 
 On lexical or source errors, the command writes deterministic diagnostics to
 stderr, writes no token stream to stdout, and exits with status 1. CLI usage
-errors exit with status 2. The first implemented token fixture becomes a golden
-test so formatting changes are intentional.
+errors exit with status 2. Both acceptance fixtures have golden tests so
+formatting changes are intentional.
 
 ## Acceptance fixtures
 

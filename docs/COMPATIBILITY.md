@@ -48,25 +48,25 @@ error.
 
 | Feature | Status | Lowering | Notes |
 |---|---|---|---|
-| `zenith --help` | Local | None | Bootstrap CLI only |
+| `zenith --help` | Local | None | Documents current inspection commands |
 | `zenith --version` | Local | None | Prints the crate version |
 | Local and CI verification | Local | None | Rust 1.88.0 fmt/test/Clippy gates plus current-stable tests |
 | Source identities | Local | None | Stable within one compiler session |
-| File-aware byte spans | Local | None | Ordered construction and UTF-8-safe slicing; line/column rendering planned in M1 |
+| File-aware byte spans | Local | None | UTF-8-safe slicing and Unicode-scalar line/column views |
 | Phase-owned diagnostics | Local | None | Source, language, schema, verification, and project phases represented |
-| `.zen` compilation | Planned | TBD | Begins with M1 lexing; no source is accepted today |
+| `.zen` compilation | Planned | TBD | Token inspection is implemented; parsing begins in M2 |
 
 ## Lexical surface
 
 | Feature | Status | Notes |
 |---|---|---|
-| UTF-8 source loading | Planned | M1 source diagnostics reject invalid UTF-8 without panicking |
-| Apex-shaped words and reserved words | Planned | M1 contract is in `docs/specifications/lexical-structure.md` |
-| Exact and canonical identifier spelling | Planned | ASCII identifier baseline with case-insensitive lookup key |
-| Integer and single-quoted string tokens | Planned | Numeric type/range belongs to later typing |
-| Comments, punctuation, and operators | Planned | Maximal-munch M1 inventory; tokenization is not parse acceptance |
-| `tokens <file.zen>` inspection | Planned | Stable golden output and explicit diagnostic exit behavior |
-| Rendered lexical diagnostics | Planned | Stable codes and Unicode-scalar line/column rendering |
+| UTF-8 source loading | Local | Invalid UTF-8 produces `source.invalid-utf8` without panicking |
+| Apex-shaped words and reserved words | Local | Case-insensitive reserved, contextual, and Zenith word tables |
+| Exact and canonical identifier spelling | Local | ASCII identifier baseline with case-insensitive lookup key |
+| Integer and single-quoted string tokens | Local | Strings decode supported escapes; numeric range belongs to typing |
+| Comments, punctuation, and operators | Local | Trivia omission and complete maximal-munch M1 inventory |
+| `tokens <file.zen>` inspection | Local | Stable goldens and explicit diagnostic/usage exit behavior |
+| Rendered lexical diagnostics | Local | Stable codes, labels, recovery, ordering, and Unicode-scalar locations |
 
 ## Language surface
 

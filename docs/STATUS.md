@@ -1,10 +1,10 @@
 # Current Status
 
-**Last updated:** 2026-07-16
+**Last updated:** 2026-07-17
 
 ## Active milestone
 
-M1 — Lexical core and source diagnostics
+M2 — Parsed syntax and immutable AST
 
 ## Completed
 
@@ -30,37 +30,39 @@ M1 — Lexical core and source diagnostics
 - A revision-pinned Apex Exec comparison and staged integration contract
 - Documented target architecture for optional generated-Apex verification,
   handwritten Apex API summaries, and coverage-guided test generation
+- Complete M1 token model for Apex-shaped and reserved Zenith words, integers,
+  decoded single-quoted strings, punctuation, maximal-munch operators, and EOF
+- Exact identifier spelling, ASCII-lowercase canonical keys, and file-aware
+  spans exposed through the public compiler API
+- UTF-8 source loading and Unicode-scalar line/column mapping across LF, CRLF,
+  and CR line endings
+- Recoverable lexical diagnostics for invalid identifiers, characters, escapes,
+  double-quoted strings, and unterminated strings/comments
+- Stable diagnostic codes, primary/secondary labels, notes, help, deterministic
+  ordering, and panic-safe rendering of malformed spans
+- `zenith tokens <file.zen>` with golden output for both M1 acceptance fixtures,
+  explicit status 1 source/compiler failures, and status 2 usage failures
+- Executable coverage of the complete keyword, contextual-word, punctuation,
+  operator, escape, comment, recovery, source-position, and CLI contracts
 
 ## Immediate target
 
-Implement M1 as a complete source-to-token slice following
-`docs/specifications/lexical-structure.md` and
-`docs/specifications/diagnostics.md`:
-
-1. Define token kinds for the baseline Apex-compatible grammar and the reserved
-   Zenith punctuation needed by near-term milestones.
-2. Add an identifier representation with exact spelling, a canonical
-   case-insensitive lookup key, and a file-aware span.
-3. Tokenize whitespace, comments, identifiers, keywords, strings, integers,
-   delimiters, and operators.
-4. Produce ordered, recoverable lexical diagnostics with stable codes and safe
-   Unicode-scalar line/column rendering.
-5. Add `zenith tokens <file.zen>` as a thin CLI adapter over the library.
-6. Execute `examples/hello.zen` and `examples/lexical-baseline.zen` through the
-   public token pipeline and lock their CLI output where appropriate.
-
-Do not begin parsing until the M1 exit criterion passes.
+Specify M2's parsed baseline and recovery contract, then implement immutable
+AST and parser modules plus `zenith ast <file.zen>` for
+`examples/lexical-baseline.zen`. Keep resolution, typing, effects, lowering,
+and emission out of the parser.
 
 ## Known limitations
 
-- No Zenith or Apex syntax is tokenized, parsed, checked, lowered, or emitted.
+- Zenith source is tokenized but not parsed, resolved, checked, lowered, or
+  emitted. Token recognition does not imply parser acceptance.
 - `check`, `build`, `emit`, `test`, and `verify` are documented targets but are
-  intentionally unavailable in the bootstrap CLI.
+  intentionally unavailable.
 - `SourceMap::add` assigns a new session-local ID per loaded entry. Stable
   path identity across project reparses, caching, and content identities are M3
   work.
-- Source spans are byte offsets; line/column rendering arrives with M1
-  diagnostics.
+- Source spans remain byte offsets; console locations are derived as 1-based
+  Unicode-scalar line and column pairs.
 - The proposed language examples document direction, not shipped syntax.
 - No Salesforce schema, Apex Exec executable adapter, Salesforce CLI, or org
   integration exists. `docs/APEX_EXEC.md` is a boundary contract, not an

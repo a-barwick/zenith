@@ -1,5 +1,12 @@
 use std::path::{Path, PathBuf};
 
+/// A 1-based line and Unicode-scalar column in a source file.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct SourceLocation {
+    pub line: usize,
+    pub column: usize,
+}
+
 /// Stable identity for a source file within one compiler session.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SourceId(u32);
@@ -78,6 +85,86 @@ impl SourceFile {
         }
         self.text.get(span.start..span.end)
     }
+
+    /// Converts a byte offset to a 1-based line and Unicode-scalar column.
+    pub fn location(&self, offset: usize) -> Option<SourceLocation> {
+        if offset > self.text.len() || !self.text.is_char_boundary(offset) {
+            return None;
+        }
+
+        let mut line = 1;
+        let mut column = 1;
+        let mut cursor = 0;
+        let bytes = self.text.as_bytes();
+
+        while cursor < offset {
+            match bytes[cursor] {
+                b'\r' => {
+                    cursor += 1;
+                    if cursor < bytes.len() && bytes[cursor] == b'\n' {
+                        cursor += 1;
+                    }
+                    line += 1;
+                    column = 1;
+                }
+                b'\n' => {
+                    cursor += 1;
+                    line += 1;
+                    column = 1;
+                }
+                _ => {
+                    let character = self.text[cursor..].chars().next().expect("valid UTF-8");
+                    cursor += character.len_utf8();
+                    column += 1;
+                }
+            }
+        }
+
+        Some(SourceLocation { line, column })
+    }
+
+    /// Returns a line without its line terminator, using a 1-based line number.
+    pub fn line_text(&self, requested_line: usize) -> Option<&str> {
+        if requested_line == 0 {
+            return None;
+        }
+
+        let mut line = 1;
+        let mut start = 0;
+        let mut cursor = 0;
+        let bytes = self.text.as_bytes();
+
+        while cursor < bytes.len() {
+            if line == requested_line && matches!(bytes[cursor], b'\r' | b'\n') {
+                return Some(&self.text[start..cursor]);
+            }
+
+            match bytes[cursor] {
+                b'\r' => {
+                    cursor += 1;
+                    if cursor < bytes.len() && bytes[cursor] == b'\n' {
+                        cursor += 1;
+                    }
+                    line += 1;
+                    start = cursor;
+                }
+                b'\n' => {
+                    cursor += 1;
+                    line += 1;
+                    start = cursor;
+                }
+                _ => {
+                    cursor += self.text[cursor..]
+                        .chars()
+                        .next()
+                        .expect("valid UTF-8")
+                        .len_utf8();
+                }
+            }
+        }
+
+        (line == requested_line).then_some(&self.text[start..])
+    }
 }
 
 /// Session-local collection of source files.
@@ -117,7 +204,7 @@ impl SourceMap {
 
 #[cfg(test)]
 mod tests {
-    use super::{SourceMap, Span};
+    use super::{SourceLocation, SourceMap, Span};
 
     #[test]
     fn assigns_stable_session_local_source_ids() {
@@ -174,5 +261,49 @@ mod tests {
         assert_eq!(file.slice(Span::new(source, 1, 3).unwrap()), Some("é"));
         assert_eq!(file.slice(Span::new(source, 2, 3).unwrap()), None);
         assert_eq!(file.slice(Span::new(source, 1, 8).unwrap()), None);
+    }
+
+    #[test]
+    fn maps_mixed_line_endings_and_unicode_to_scalar_locations() {
+        let mut sources = SourceMap::new();
+        let source = sources.add("positions.zen", "aé\r\nβ\rc\n");
+        let file = sources.get(source).unwrap();
+
+        assert_eq!(
+            file.location(0),
+            Some(SourceLocation { line: 1, column: 1 })
+        );
+        assert_eq!(
+            file.location("a".len()),
+            Some(SourceLocation { line: 1, column: 2 })
+        );
+        assert_eq!(
+            file.location("aé\r\n".len()),
+            Some(SourceLocation { line: 2, column: 1 })
+        );
+        assert_eq!(
+            file.location("aé\r\nβ\r".len()),
+            Some(SourceLocation { line: 3, column: 1 })
+        );
+        assert_eq!(
+            file.location(file.text().len()),
+            Some(SourceLocation { line: 4, column: 1 })
+        );
+        assert_eq!(file.location(2), None);
+        assert_eq!(file.location(file.text().len() + 1), None);
+    }
+
+    #[test]
+    fn returns_lines_without_any_supported_terminator() {
+        let mut sources = SourceMap::new();
+        let source = sources.add("lines.zen", "first\r\nsecond\rthird\n");
+        let file = sources.get(source).unwrap();
+
+        assert_eq!(file.line_text(1), Some("first"));
+        assert_eq!(file.line_text(2), Some("second"));
+        assert_eq!(file.line_text(3), Some("third"));
+        assert_eq!(file.line_text(4), Some(""));
+        assert_eq!(file.line_text(0), None);
+        assert_eq!(file.line_text(5), None);
     }
 }

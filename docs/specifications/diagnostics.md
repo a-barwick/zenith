@@ -2,9 +2,8 @@
 
 ## Status
 
-Severity, phase ownership, messages, and optional primary spans are
-**Implemented foundations**. Stable codes, labels, rendering, ordering, and
-multi-diagnostic results are **Specified for M1; not implemented**.
+Severity, phase ownership, stable codes, labels, notes/help, rendering,
+ordering, and multi-diagnostic results are **Implemented in M1**.
 
 ## Diagnostic model
 

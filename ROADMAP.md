@@ -29,7 +29,7 @@ and immediate work without reconstructing project intent.
 
 ## M1 — Lexical core and source diagnostics
 
-**Status:** Active
+**Status:** Complete
 
 ### Scope
 
@@ -50,7 +50,7 @@ Unicode source positions, invalid characters, and unterminated constructs.
 
 ## M2 — Parsed syntax and immutable AST
 
-**Status:** Planned
+**Status:** Active
 
 ### Scope
 
