@@ -15,11 +15,11 @@ impl SourceId {
 }
 
 /// A half-open byte range within one source file.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Span {
-    pub source: SourceId,
-    pub start: usize,
-    pub end: usize,
+    source: SourceId,
+    start: usize,
+    end: usize,
 }
 
 impl Span {
@@ -29,6 +29,26 @@ impl Span {
         } else {
             None
         }
+    }
+
+    pub const fn source(self) -> SourceId {
+        self.source
+    }
+
+    pub const fn start(self) -> usize {
+        self.start
+    }
+
+    pub const fn end(self) -> usize {
+        self.end
+    }
+
+    pub const fn len(self) -> usize {
+        self.end - self.start
+    }
+
+    pub const fn is_empty(self) -> bool {
+        self.start == self.end
     }
 }
 
@@ -130,5 +150,29 @@ mod tests {
         let source = sources.add("main.zen", "");
 
         assert!(Span::new(source, 3, 2).is_none());
+    }
+
+    #[test]
+    fn exposes_only_ordered_span_coordinates() {
+        let mut sources = SourceMap::new();
+        let source = sources.add("main.zen", "value");
+        let span = Span::new(source, 2, 2).unwrap();
+
+        assert_eq!(span.source(), source);
+        assert_eq!(span.start(), 2);
+        assert_eq!(span.end(), 2);
+        assert_eq!(span.len(), 0);
+        assert!(span.is_empty());
+    }
+
+    #[test]
+    fn slices_unicode_only_at_valid_byte_boundaries() {
+        let mut sources = SourceMap::new();
+        let source = sources.add("unicode.zen", "aéz");
+        let file = sources.get(source).unwrap();
+
+        assert_eq!(file.slice(Span::new(source, 1, 3).unwrap()), Some("é"));
+        assert_eq!(file.slice(Span::new(source, 2, 3).unwrap()), None);
+        assert_eq!(file.slice(Span::new(source, 1, 8).unwrap()), None);
     }
 }

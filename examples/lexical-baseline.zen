@@ -1,0 +1,18 @@
+/* M1/M2 token baseline. This file is not compiled yet. */
+public with sharing class LexicalBaseline {
+    public String label { get; private set; }
+
+    public static Integer sum(List<Integer> values) {
+        Integer total = 0;
+        for (Integer value : values) {
+            if (value < 0) {
+                continue;
+            }
+            total += value;
+        }
+
+        // Unicode belongs in source positions and string contents.
+        System.debug('Résumé:\n' + total);
+        return total;
+    }
+}

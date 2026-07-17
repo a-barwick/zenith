@@ -6,10 +6,10 @@
 
 ## Context
 
-Zenith adds guarantees and expression that Apex does not provide directly, but
-Salesforce remains the required production platform. A custom VM or managed
-runtime would add deployment, security review, packaging, observability, and
-operational costs before the language delivers value.
+Zenith adds guarantees and expressiveness that Apex does not provide directly,
+but Salesforce remains the required production platform. A custom VM or
+managed runtime would add deployment, security review, packaging,
+observability, and operational costs before the language delivers value.
 
 Existing Salesforce projects also need incremental adoption and direct
 interoperation with hand-written Apex.

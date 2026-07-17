@@ -4,6 +4,8 @@ These documents record Zenith's intended observable behavior. They guide
 implementation but do not replace executable evidence.
 
 - [Language foundations](language-foundations.md)
+- [Lexical structure](lexical-structure.md)
+- [Diagnostics](diagnostics.md)
 - [Governor effects](governor-effects.md)
 
 Every rule is labeled **Implemented**, **Planned**, **Proposed**, or

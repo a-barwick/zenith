@@ -18,6 +18,9 @@ source.
 Zenith identifiers are case-insensitive because the Apex target is
 case-insensitive. Two declarations that differ only in case conflict.
 
+The M1 identifier character and canonicalization rules are defined in
+`lexical-structure.md`.
+
 Each identifier retains:
 
 - exact source spelling for diagnostics and readable emission
@@ -45,8 +48,8 @@ explicitly.
 **Proposed for M4.** Values are non-null by default. `T?` admits null:
 
 ```zenith
-Account account;
-Account? maybeAccount;
+Account account = requireAccount();
+Account? maybeAccount = findAccount();
 ```
 
 Control flow narrows nullable values after checks. A nullable value cannot be

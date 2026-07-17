@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Rust 1.88 quality gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.88.0 --profile minimal --component rustfmt --component clippy
+      - name: Check formatting
+        run: rustup run 1.88.0 cargo fmt --check
+      - name: Run tests
+        run: rustup run 1.88.0 cargo test --locked
+      - name: Run Clippy
+        run: rustup run 1.88.0 cargo clippy --all-targets --locked -- -D warnings
+
+  stable:
+    name: Current stable compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Run tests on current stable
+        run: rustup run stable cargo test --locked

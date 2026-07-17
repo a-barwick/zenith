@@ -4,5 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 description = "A safe, bulk-first language that compiles to Salesforce Apex"
+repository = "https://github.com/a-barwick/zenith"
+readme = "README.md"
 
 [dependencies]

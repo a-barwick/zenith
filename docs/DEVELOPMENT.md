@@ -6,9 +6,10 @@
 - Cargo
 - Git
 
-The bootstrap crate has no third-party dependencies. Salesforce CLI and Apex
-Exec become optional verification tools only when their roadmap integrations
-arrive.
+`rust-toolchain.toml` pins Rust 1.88.0 with `rustfmt` and Clippy so local and CI
+quality gates use the declared minimum toolchain. The bootstrap crate has no
+third-party dependencies. Salesforce CLI and Apex Exec become optional
+verification tools only when their roadmap integrations arrive.
 
 ## Build and inspect
 
@@ -18,11 +19,13 @@ cargo run -- --help
 cargo run -- --version
 ```
 
-The baseline source fixture is `examples/hello.zen`. The active M1 milestone
-will introduce:
+The smallest source fixture is `examples/hello.zen`; the broader M1/M2 token
+baseline is `examples/lexical-baseline.zen`. The active M1 milestone will
+introduce:
 
 ```bash
 cargo run -- tokens examples/hello.zen
+cargo run -- tokens examples/lexical-baseline.zen
 ```
 
 Do not document a CLI command as current behavior before an executable test
@@ -38,6 +41,8 @@ cargo clippy --all-targets -- -D warnings
 
 Run the relevant CLI example after changing command behavior. Once emission
 exists, inspect the generated Apex and run its available compiler verification.
+GitHub Actions runs the required gates with Rust 1.88.0 and also executes the
+test suite on the current stable Rust release.
 
 ## Git workflow
 
@@ -65,7 +70,12 @@ Read, in order:
 3. `docs/STATUS.md`
 4. `docs/ARCHITECTURE.md`
 5. `docs/COMPATIBILITY.md`
-6. the directly relevant specification and ADRs
+6. `docs/specifications/README.md`
+7. `docs/decisions/README.md`
+8. the directly relevant specification and ADRs
+
+Read `docs/APEX_EXEC.md` before work on Apex compatibility, generated-Apex
+verification, or a local execution adapter.
 
 `STATUS.md` identifies the single immediate target. The roadmap defines its
 boundary and exit criterion.
@@ -76,6 +86,10 @@ Inspect the current branch, working tree, recent commits, and relevant tests.
 Preserve unrelated changes. Create a scoped `codex/` branch before editing.
 
 ### 3. Select one vertical slice
+
+Before a milestone becomes Active, make its acceptance fixture and the
+specifications required for implementation explicit. If those are missing,
+specification is the first slice rather than agent-local design-by-code.
 
 Choose the smallest behavior that crosses every required phase honestly. For
 example, one operator may require a token, parser rule, typed HIR fact, lowering
@@ -151,6 +165,11 @@ Behavior should be exercised at the narrowest useful layer:
 Full-program `.zen` scenarios should combine several supported features and run
 through the public compiler API and built CLI. Keep narrow edge cases in the
 owning module.
+
+Real-world vendored fixtures must record their immutable upstream revision,
+license, content fingerprint, and why they exercise a distinct supported or
+aspirational boundary. An ignored progress indicator never counts as shipped
+compatibility evidence.
 
 ## Generated-output review
 

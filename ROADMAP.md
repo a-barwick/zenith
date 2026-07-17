@@ -13,6 +13,7 @@ Status values: **Complete**, **Active**, **Planned**, and **Deferred**.
 ### Scope
 
 - Rust library and binary crate
+- Pinned Rust toolchain and automated formatting, test, and lint verification
 - Source file identities and byte spans
 - Phase-owned diagnostics
 - Bootstrap CLI help and version behavior
@@ -23,8 +24,8 @@ Status values: **Complete**, **Active**, **Planned**, and **Deferred**.
 ### Exit criterion
 
 The crate builds without third-party dependencies, its unit and CLI smoke tests
-pass, and a new Codex task can identify the active milestone and immediate work
-without reconstructing project intent.
+pass locally and in CI, and a new Codex task can identify the active milestone
+and immediate work without reconstructing project intent.
 
 ## M1 — Lexical core and source diagnostics
 
@@ -38,12 +39,14 @@ without reconstructing project intent.
 - Case-insensitive canonical names with source spelling preserved
 - File-aware lexical diagnostics with line and column rendering
 - `tokens <file.zen>` CLI inspection
+- Stable token output and deterministic multi-diagnostic ordering
 
 ### Exit criterion
 
-`zenith tokens examples/hello.zen` prints a stable token stream, and executable
-tests cover comments, escapes, keyword casing, operator boundaries, Unicode
-source positions, invalid characters, and unterminated constructs.
+`zenith tokens examples/hello.zen` and
+`zenith tokens examples/lexical-baseline.zen` print stable token streams, and
+executable tests cover comments, escapes, keyword casing, operator boundaries,
+Unicode source positions, invalid characters, and unterminated constructs.
 
 ## M2 — Parsed syntax and immutable AST
 
@@ -52,7 +55,7 @@ source positions, invalid characters, and unterminated constructs.
 ### Scope
 
 - Class, field, property, method, parameter, statement, and expression syntax
-  needed by the baseline example
+  needed by `examples/lexical-baseline.zen`
 - Blocks, declarations, assignment, calls, member access, conditionals, and
   loops
 - Type syntax including generic arguments and nullable suffix reservation
@@ -62,7 +65,7 @@ source positions, invalid characters, and unterminated constructs.
 
 ### Exit criterion
 
-The baseline example parses to a stable AST, invalid programs produce localized
+The lexical baseline parses to a stable AST, invalid programs produce localized
 syntax diagnostics, and the parser contains no name, type, effect, or emission
 logic.
 
@@ -72,20 +75,24 @@ logic.
 
 ### Scope
 
-- Project discovery for `.zen` units and minimal `zenith.toml`
+- Project discovery for `.zen` units and minimal `zenith.toml`, including a
+  required target Salesforce API version
 - Cross-file declaration collection and case-insensitive name resolution
 - Primitive, class, method, field, property, and collection types required by
   ordinary service classes
 - Checked call/member targets in typed HIR
 - Apex IR distinct from source AST and typed HIR
-- Deterministic, formatted `.cls` emission and source maps
+- Deterministic, formatted `.cls` and `.cls-meta.xml` emission plus source maps
 - `check`, `build`, and `emit` CLI commands
+- Optional pinned Apex Exec compile smoke verification for its supported subset
 
 ### Exit criterion
 
 A multi-file Apex-shaped Zenith service compiles into an SFDX-compatible set of
-readable `.cls` files. Repeated builds are byte-identical, unsupported syntax
-fails explicitly, and generated Apex passes the available Apex compiler check.
+readable class and metadata files for its configured API version. Repeated
+builds are byte-identical, unsupported syntax fails explicitly, and a pinned
+Apex Exec smoke fixture accepts the supported emitted baseline without becoming
+a required dependency of `check` or `build`.
 
 This is the first deployable-language checkpoint.
 
@@ -115,13 +122,18 @@ immutable bindings, and non-exhaustive matches fail during checking.
 
 ### Scope
 
-- SFDX custom object and field metadata import
+- Deterministic standard-schema input plus SFDX custom object and field metadata
+  import and merge rules
 - Normalized case-insensitive Salesforce schema
 - Dedicated static query syntax and bind expressions
 - Query projection types such as `Account{Id, Name, Owner.Email}`
 - Relationship and field nullability from schema plus query shape
 - Static validation of filters, ordering, aggregates, and common relationships
 - Deterministic SOQL emission
+
+Before M5 becomes Active, its specification must select the deterministic
+standard-schema artifact, version/fingerprint policy, and precedence rules for
+merging standard, org-derived, and project custom metadata.
 
 ### Exit criterion
 
@@ -203,6 +215,8 @@ and privileged-data escape fail during checking.
 - Changed-field projections
 - Bulk effects across trigger handlers
 - Recursion policy and deterministic handler generation
+- Deterministic `.trigger` and `.trigger-meta.xml` output for the configured API
+  version
 - After-commit work with explicit transaction-boundary semantics
 
 ### Exit criterion
@@ -220,10 +234,14 @@ and bulk/recursive behavior is covered by executable fixtures.
 - Zenith test discovery, assertions, parameterized cases, and generated Apex
   tests
 - Source-mapped failures and coverage
-- Apex Exec integration for supported local generated-Apex execution
+- Versioned, capability-gated Apex Exec adapter for supported local
+  generated-Apex execution
 - Deterministic schema/data fixtures
 - Selective Salesforce validation and differential fixtures
 - `test` and `verify` CLI workflows
+
+The supported Apex Exec adapter requires the structured process protocol
+defined by `docs/APEX_EXEC.md`; human stderr is not a source-mapping API.
 
 ### Exit criterion
 
@@ -259,7 +277,8 @@ retry behavior, and executable recovery tests.
 - Safe compile-time derivations for JSON, builders, equality, and adapters
 - Incremental compilation and dependency-scoped invalidation
 - Content-addressed generated artifacts and build manifests
-- API/version compatibility profiles
+- Multiple API/version compatibility profiles beyond M3's required project
+  target
 - IDE/LSP integration based on the compiler library
 
 ### Exit criterion

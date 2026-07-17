@@ -19,7 +19,7 @@ regressions difficult to detect.
 
 Generated Apex is deterministic, formatted, readable, collision-safe, and
 covered by golden tests. It is produced from a distinct valid Apex IR after
-Zenith typing, effect analysis, and lowering are complete.
+Zenith typing, schema and effect analysis, and lowering are complete.
 
 Builds also emit source maps and a manifest that identify generated helpers and
 their semantic owners. The emitter does not resolve names, infer types, or
