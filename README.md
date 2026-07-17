@@ -53,21 +53,35 @@ be null, which SObject type an ID belongs to, and how SOQL/DML effects compose
 through the call graph. It should lower those guarantees into deterministic,
 human-readable Apex.
 
+## Testing direction
+
+Zenith is intended to automate a large part of Apex test creation. Typed
+control flow, schema constraints, explicit contracts, examples, and local
+coverage can drive deterministic fixture and input generation. Cases with a
+trustworthy oracle can become managed generated tests; ambiguous cases become
+editable drafts rather than assertion-free coverage theater.
+
+Local execution runs the generated Apex through a compatible backend such as
+Apex Exec and maps failures and coverage back to Zenith. Apex Exec is optional,
+does not define Zenith semantics, and is not a production dependency.
+
 ## Architecture at a glance
 
 ```text
-Zenith source
+Zenith source + Salesforce metadata + handwritten-Apex API summaries
   → tokens
   → immutable syntax
   → name resolution and typed HIR
   → schema and governor-effect analysis
   → lowered Apex IR
   → generated SFDX source + source maps
-  → local and Salesforce verification
+  → optional Apex Exec verification of generated Apex
+  → final Salesforce verification
 ```
 
 The compiler phases stay independently testable. Generated Apex is a product
-surface, not a disposable implementation detail.
+surface, not a disposable implementation detail. User-facing local tests do
+not bypass lowering by executing Zenith HIR directly.
 
 ## Project documentation
 

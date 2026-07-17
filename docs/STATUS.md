@@ -21,12 +21,15 @@ M1 — Lexical core and source diagnostics
   typing, schema checking, effects, lowering, emission, verification, and
   project orchestration
 - Initial decisions covering compile-to-Apex deployment, case-insensitive
-  names, generated Apex as a product surface, and the Apex Exec process boundary
+  names, generated Apex as a product surface, the Apex Exec process boundary,
+  and generated-test oracle requirements
 - M1 lexical and diagnostic contracts that settle identifiers, keyword and
   operator inventory, strings/comments, recovery, positions, codes, ordering,
   CLI output, and exit behavior
 - Small and broad `.zen` fixtures reserved for the first token slice
 - A revision-pinned Apex Exec comparison and staged integration contract
+- Documented target architecture for optional generated-Apex verification,
+  handwritten Apex API summaries, and coverage-guided test generation
 
 ## Immediate target
 
@@ -62,6 +65,8 @@ Do not begin parsing until the M1 exit criterion passes.
 - No Salesforce schema, Apex Exec executable adapter, Salesforce CLI, or org
   integration exists. `docs/APEX_EXEC.md` is a boundary contract, not an
   implemented integration.
+- No test execution, coverage, or generated-test integration exists. The
+  documented generated-test workflow is a planned interface.
 - No repository license or crate-publication policy has been selected; future
   tasks must not infer one.
 

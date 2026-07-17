@@ -42,6 +42,12 @@ generated-Apex verification or Apex compatibility must also read
   produce an explicit unsupported diagnostic. Never silently approximate it.
 - Treat generated Apex and source maps as observable product output. Add golden
   tests when output changes intentionally.
+- Run user-facing local verification against generated Apex, never directly
+  against Zenith AST or HIR. Backend capability gaps are unsupported local
+  verification, not Zenith compilation failures.
+- Keep generated-test coverage separate from correctness. A managed generated
+  test needs a semantic or developer-authored oracle; otherwise emit a
+  reviewable draft or a non-deployable probe.
 - Add executable positive and negative tests for every observable behavior and
   every bug fix.
 - Record expensive or consequential design choices in `docs/decisions/`.

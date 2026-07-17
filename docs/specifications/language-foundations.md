@@ -43,6 +43,19 @@ The early compiler accepts a deliberately selected Apex-shaped baseline:
 The goal is not immediate full Apex parsing. Unsupported syntax is diagnosed
 explicitly.
 
+## Existing Apex interoperability
+
+**Proposed for M3 and M12.** Zenith modules may coexist with handwritten Apex
+in one SFDX project. Early interoperation uses explicit declaration summaries
+for external classes and members. A later compatible Apex compiler may export a
+versioned semantic API index so Zenith can import signatures, overloads,
+inheritance, and visibility without adopting that compiler's AST or HIR.
+
+External declarations do not acquire trusted Zenith effects, nullability, query
+shapes, or security provenance merely because an Apex compiler resolved them.
+Unknown behavior remains conservative unless an explicit checked boundary
+contract supplies stronger information.
+
 ## Nullability
 
 **Proposed for M4.** Values are non-null by default. `T?` admits null:
@@ -112,3 +125,7 @@ Every accepted construct declares a lowering class in
 - mapped back to Zenith source
 
 If these requirements cannot be met, the construct remains unsupported.
+
+Local execution through Apex Exec or another backend validates this generated
+artifact. It does not define Zenith language semantics and does not replace
+Salesforce verification.

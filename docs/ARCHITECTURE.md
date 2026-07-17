@@ -21,10 +21,24 @@ Diagnostic
 There is intentionally no placeholder lexer, parser, semantic checker, or
 emitter. Each module arrives with the milestone that owns executable behavior.
 
+## Product and runtime boundary
+
+Zenith is a source-to-source compiler with a TypeScript-like deployment model:
+developers author a richer language, while ordinary target-language artifacts
+remain the unit of deployment and execution. It is not a token-rewriting
+transpiler. Query shapes, nullability, typed IDs, security provenance, governor
+effects, and selected calls require a complete semantic pipeline before Apex
+can be emitted.
+
+Salesforce is the production runtime. Apex Exec is an optional local
+verification and execution backend, not a Zenith runtime and not the owner of
+Zenith semantics. `check` and `build` must remain usable without it.
+
 ## Target compiler pipeline
 
 ```text
 Zenith source + project configuration + Salesforce metadata
+              + explicit or extracted handwritten-Apex API summaries
     │
     ▼
 Source loader ─► stable file identities, line indexes, and source text
@@ -56,8 +70,9 @@ Apex emitter ─► formatted SFDX source, metadata, and source-map segments
     ▼
 Project output ► deterministic layout, manifest, and compatibility evidence
     │
-    ├──► Apex Exec local checks/tests where supported
-    └──► Salesforce validation as the final oracle
+    ├──► versioned verification adapter ─► Apex Exec checks/tests
+    │                                      where supported
+    └──► Salesforce adapter ─────────────► final validation oracle
 ```
 
 The CLI is a thin adapter over the compiler library. It owns arguments,
@@ -94,6 +109,12 @@ or make emission choices.
 Resolution selects declarations independent of runtime values. Typing records
 the selected call/member, conversions, nullability, generic substitutions, and
 value category in HIR. Lowering must not repeat overload resolution.
+
+Handwritten Apex declarations enter through explicit boundary declarations or
+a versioned semantic API index produced by a compatible Apex compiler. The
+index may supply names, signatures, members, inheritance, and visibility; it
+does not supply Zenith governor or security guarantees. External behavior
+without a checked Zenith contract remains conservative.
 
 ### Schema checking
 
@@ -137,6 +158,66 @@ guarantees. Apex Exec can provide fast local feedback for its compatible
 surface through the boundary in `docs/APEX_EXEC.md`; Salesforce remains the
 final oracle for deployment behavior.
 
+Local user tests execute generated Apex rather than Zenith AST or HIR. This
+ensures the normal test loop exercises lowering, generated helpers, and target
+emission. Verification translates generated-file diagnostics, stack frames,
+and coverage through the build source map before reporting them to a Zenith
+developer.
+
+The Apex Exec adapter uses a versioned machine-readable protocol rather than
+depending on compiler or runtime internals. Requests identify the generated
+project and target profile. Responses include backend and protocol versions,
+declared capabilities, structured diagnostics, test events, runtime frames,
+and coverage.
+
+Every operation produces one of three outcomes:
+
+| Outcome | Meaning |
+|---|---|
+| Passed | The backend declares the required capability and the operation succeeded |
+| Unsupported | The backend cannot cover part of the emitted surface; the Zenith build remains valid and another backend is required |
+| Failed | The backend declares support and reports a compile, test, or runtime failure |
+
+Unsupported local verification must never be rendered as either a Zenith
+compile error or a passing test. The complete boundary is recorded in
+[ADR 0004](decisions/0004-apex-exec-process-boundary.md).
+
+### Test planning and generation
+
+Test generation consumes checked HIR, control-flow identities, schema
+constraints, effect summaries, authored examples or contracts, deterministic
+fixtures, and source-mapped coverage. It produces an explicit test plan before
+any test source or Apex IR is emitted.
+
+```text
+Typed/effect HIR + schema + contracts/examples
+                     │
+                     ▼
+Test planner ─────► branch goals, inputs, fixtures, oracle classes
+                     │
+                     ▼
+Candidate lowering ► generated Apex tests or local coverage probes
+                     │
+                     ▼
+Apex Exec ─────────► coverage and runtime results
+                     │
+                     └──► source-map feedback to stable Zenith branch goals
+```
+
+Compiler-owned tests require an oracle derived from language semantics or an
+explicit developer-authored contract, invariant, or example. When no trustworthy
+oracle exists, Zenith may generate an editable draft or use a non-deployable
+coverage probe during synthesis. It does not silently promote invocation-only
+code or observed behavior into a trusted test.
+
+Coverage and oracle strength are independent report dimensions. Generated cases
+carry provenance and stable identities so managed output can be regenerated,
+editable drafts can be adopted without later overwrite, and stale cases can be
+identified. The proposed behavior is specified in
+[Testing and test generation](specifications/testing-and-test-generation.md)
+and its trust boundary is recorded in
+[ADR 0005](decisions/0005-generated-tests-need-oracles.md).
+
 ## Current modules
 
 | Module | Responsibility |
@@ -159,7 +240,9 @@ final oracle for deployment behavior.
 | `lower` | Zenith-to-Apex semantic desugaring |
 | `apex_ir` / `emit` | Valid target representation, Apex text, companion metadata, and source-map segments |
 | `project` | Configuration, dependency graph, caching, output layout, and build manifests |
-| `verify` | Apex Exec and Salesforce validation adapters |
+| `apex_api` | Explicit or extracted declarations for handwritten Apex interoperability |
+| `test_plan` | Branch goals, generated fixtures, oracle provenance, and candidate minimization |
+| `verify` | Versioned Apex Exec and Salesforce validation adapters |
 
 Module names can evolve through implementation, but the ownership boundaries
 require an ADR to collapse.
@@ -186,6 +269,9 @@ collision rules allow it.
 - Lowering never performs unresolved name lookup.
 - The emitter never accepts malformed target IR.
 - Verification never turns an unsupported Zenith construct into accepted code.
+- Local execution never bypasses lowering by interpreting Zenith HIR.
+- Test generation never equates reached coverage with a valid behavioral
+  oracle.
 
 ### Explicit unsupported behavior
 
@@ -205,6 +291,10 @@ Every generated user-semantic operation should map to its originating Zenith
 span. Generated scaffolding without a direct source construct maps to the
 enclosing declaration and is labeled generated in the manifest.
 
+Backend diagnostics, runtime frames, and coverage first resolve in generated
+Apex span space, then map to Zenith spans. Managed generated tests and
+assertions additionally retain their test-plan and oracle identities.
+
 ## Generated artifact layout
 
 The target layout is:
@@ -215,12 +305,17 @@ The target layout is:
     force-app/main/default/classes/
       Example.cls
       Example.cls-meta.xml
+  test-candidates/
   build.json
   source-map.json
+  verification.json
 ```
 
 Generated files are disposable build artifacts. Golden fixtures under `tests/`
 are the exception and exist specifically to review emitter behavior.
+`test-candidates/` contains non-deployable synthesis probes. An explicit adopt
+operation may create editable `.zen` drafts outside `.zenith/`; adopted files
+become developer-owned and are not overwritten.
 
 `build.json` should record at least:
 
@@ -232,6 +327,13 @@ are the exception and exist specifically to review emitter behavior.
 - runtime-helper requirements, if any
 - compatibility profile
 - external verifier version, capability profile, and result when one ran
+- generated-test provenance and oracle class
+- required verification capabilities
+
+`verification.json` records the selected backend, protocol and backend
+versions, declared capability profile, result state, and any Salesforce
+differential evidence. A prior result is stale when its generated artifact,
+configuration, schema, or backend profile fingerprints no longer match.
 
 ## Compatibility boundaries
 
@@ -252,6 +354,9 @@ not a Zenith compiler phase or source-language dependency. M3 may use a pinned
 compile smoke check after emission. Rich source-mapped test integration waits
 for the versioned protocol required by M10 and ADR 0004. Backend unsupported
 results remain visible and never become compiler success.
+
+Verification backends are not a fifth lowering class. They consume emitted
+Apex and cannot make an otherwise unsupported lowering acceptable.
 
 ## Performance direction
 

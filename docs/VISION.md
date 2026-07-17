@@ -50,9 +50,21 @@ build manifest and source maps under `.zenith/`.
 zenith test
 ```
 
-Tests compile and run locally through a compatible execution backend where
-possible. Generated Apex can also be checked through Apex Exec without making
-it a production dependency.
+Zenith compiles authored and compiler-generated tests to Apex, runs that
+generated artifact through a compatible local backend such as Apex Exec, and
+maps failures and coverage back to `.zen` source. A backend compatibility gap
+is reported as unsupported locally rather than mistaken for a Zenith compile
+failure.
+
+```bash
+zenith test generate
+```
+
+The compiler uses types, control flow, schema constraints, contracts, examples,
+and coverage feedback to generate fixtures and branch-targeted cases.
+Trustworthy oracles become managed tests; ambiguous behavior becomes an
+editable draft requiring review. Coverage probes never masquerade as
+correctness tests.
 
 ```bash
 zenith verify --target-org staging
@@ -81,6 +93,12 @@ target diagnostics and test failures back to Zenith source.
    and compiler versions produce identical artifacts and diagnostics.
 9. **Compatibility is measured.** Golden output, Apex Exec checks, and eventual
    Salesforce differential fixtures support every compatibility claim.
+10. **Local execution validates the deployment artifact.** Tests run generated
+    Apex rather than a separate Zenith interpreter, so lowering and helpers are
+    part of the exercised behavior.
+11. **Generated tests need oracles.** Zenith automates fixtures, inputs, branch
+    discovery, and assertions where intent is explicit, but never presents
+    code coverage alone as proof of correctness.
 
 ## Initial language pillars
 
@@ -114,6 +132,16 @@ target diagnostics and test failures back to Zenith source.
 - Exhaustive pattern matching
 - Modules and safe compile-time derivations
 
+### Faster verification
+
+- Generated-Apex compilation and local execution through versioned backends
+- Source-mapped test failures, stack frames, and coverage
+- Deterministic schema, data, time, callout, and async fixtures
+- Coverage-guided generation of branch-targeted inputs
+- Assertions derived from contracts, invariants, examples, and language
+  semantics
+- Editable test drafts when business intent cannot be inferred safely
+
 ## Non-goals
 
 - Replace the Salesforce runtime in production.
@@ -125,6 +153,11 @@ target diagnostics and test failures back to Zenith source.
 - Preserve source-level compatibility when a Zenith feature has no honest Apex
   lowering.
 - Claim Salesforce compatibility without executable evidence.
+- Execute Zenith HIR locally as a semantic substitute for generated Apex.
+- Generate assertion-free deployment tests merely to satisfy a coverage
+  threshold.
+- Infer business intent from implementation alone or silently treat observed
+  behavior as correct.
 
 ## Success measures
 
@@ -138,3 +171,8 @@ target diagnostics and test failures back to Zenith source.
 - Existing Apex and generated Apex interoperate in an ordinary SFDX project.
 - Most development checks run locally; org verification is a targeted final
   gate.
+- Generated fixtures and branch-targeted drafts remove substantial test
+  boilerplate, while every trusted generated test identifies its behavioral
+  oracle.
+- Local coverage, failures, and stack frames map to Zenith source even though
+  the backend executes generated Apex.

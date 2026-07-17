@@ -30,8 +30,13 @@ process boundary.
   tests, stacks, output, or coverage become a supported integration.
 - Backend results distinguish success, failure, unsupported capability, and
   internal error.
+- User-facing local execution always runs generated Apex, never Zenith AST or
+  HIR, so it exercises the artifact deployed to Salesforce.
 - Zenith records the backend version and capability profile and owns mapping
   generated spans back to Zenith source.
+- Apex Exec may export a versioned semantic API index for handwritten Apex
+  names, signatures, members, overloads, and visibility. Zenith assigns
+  conservative effects and security assumptions to that external surface.
 - Salesforce remains the final compatibility oracle.
 
 Zenith does not add sibling path dependencies or import Apex Exec compiler or
@@ -46,3 +51,5 @@ runtime representations.
   integration is reliable.
 - Unsupported backend coverage remains visible rather than weakening Zenith's
   checks or being reported as success.
+- Cross-project conformance fixtures are required for every claimed integration
+  capability.
