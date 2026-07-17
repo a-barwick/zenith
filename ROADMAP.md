@@ -76,16 +76,23 @@ logic.
 - Cross-file declaration collection and case-insensitive name resolution
 - Primitive, class, method, field, property, and collection types required by
   ordinary service classes
+- Explicit declaration summaries for the handwritten Apex boundary, with
+  conservative unknown effects
 - Checked call/member targets in typed HIR
 - Apex IR distinct from source AST and typed HIR
 - Deterministic, formatted `.cls` emission and source maps
+- Backend-neutral verification outcomes and an optional generated-Apex compiler
+  adapter
 - `check`, `build`, and `emit` CLI commands
 
 ### Exit criterion
 
 A multi-file Apex-shaped Zenith service compiles into an SFDX-compatible set of
-readable `.cls` files. Repeated builds are byte-identical, unsupported syntax
-fails explicitly, and generated Apex passes the available Apex compiler check.
+readable `.cls` files beside a handwritten Apex dependency. Repeated builds are
+byte-identical, unsupported syntax fails explicitly, and a compatible available
+Apex compiler accepts the generated artifact. An unavailable backend or
+unsupported target feature is reported distinctly from a Zenith compilation
+failure.
 
 This is the first deployable-language checkpoint.
 
@@ -211,7 +218,7 @@ A multi-event trigger slice compiles into a thin Apex trigger plus generated
 handler classes. Event-invalid access and per-record resource work are rejected,
 and bulk/recursive behavior is covered by executable fixtures.
 
-## M10 — Tests and local verification
+## M10 — Tests, generated verification, and local execution
 
 **Status:** Planned
 
@@ -220,16 +227,27 @@ and bulk/recursive behavior is covered by executable fixtures.
 - Zenith test discovery, assertions, parameterized cases, and generated Apex
   tests
 - Source-mapped failures and coverage
-- Apex Exec integration for supported local generated-Apex execution
+- Versioned Apex Exec protocol with declared capabilities and distinct passed,
+  unsupported, and failed outcomes
+- Local execution of generated Apex rather than direct Zenith HIR execution
 - Deterministic schema/data fixtures
+- Stable control-flow and branch-goal identities in typed HIR
+- Coverage-guided fixture and input generation
+- Managed semantic/contract tests with explicit oracle provenance
+- Editable test drafts when a behavioral oracle requires developer review
+- Opt-in characterization tests and non-deployable local coverage probes
 - Selective Salesforce validation and differential fixtures
-- `test` and `verify` CLI workflows
+- `test`, `test generate`, and `verify` CLI workflows
 
 ### Exit criterion
 
 A representative Zenith project runs its ordinary test loop locally, maps
-failures and coverage to `.zen` source, and executes a targeted final validation
-against Salesforce with recorded compatibility results.
+failures and coverage from generated Apex to `.zen` source, and executes a
+targeted final validation against Salesforce with recorded compatibility
+results. For a service with explicit examples or contracts, Zenith
+deterministically generates schema-valid inputs that reach previously uncovered
+branches and emits trusted tests only where it can identify a valid oracle;
+remaining useful cases are emitted as reviewable drafts.
 
 ## M11 — Durable asynchronous workflows
 
@@ -260,6 +278,8 @@ retry behavior, and executable recovery tests.
 - Incremental compilation and dependency-scoped invalidation
 - Content-addressed generated artifacts and build manifests
 - API/version compatibility profiles
+- Versioned import of Apex semantic API indexes for handwritten-code
+  interoperability where a compatible Apex compiler provides them
 - IDE/LSP integration based on the compiler library
 
 ### Exit criterion
@@ -276,3 +296,5 @@ and exposes a stable compiler API for editor tooling.
   transaction semantics
 - Features that require deploying an opaque managed runtime to every org
 - Broad platform API coverage unrelated to a complete language slice
+- Fully autonomous generation of business-correct assertions from
+  implementation code with no contract, invariant, example, or review

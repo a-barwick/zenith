@@ -76,3 +76,5 @@ The diagnostic must originate from effect HIR, not from scanning emitted Apex.
 - Pretend every runtime-dependent row count has a precise static bound.
 - Replace Salesforce runtime enforcement.
 - Treat warnings as proof that a program is bulk-safe.
+- Treat generated test coverage of a path as proof that its effect bound is
+  safe for every runtime input.

@@ -16,7 +16,10 @@ M1 — Lexical core and source diagnostics
 - Compiler diagnostic categories for source, lexing, parsing, resolution,
   typing, effects, lowering, emission, and project orchestration
 - Initial decisions covering compile-to-Apex deployment, case-insensitive
-  names, and generated Apex as a product surface
+  names, generated Apex as a product surface, the Apex Exec verification
+  boundary, and generated-test oracle requirements
+- Documented target architecture for optional generated-Apex verification,
+  handwritten Apex API summaries, and coverage-guided test generation
 - A baseline `.zen` example reserved for the first compiler slice
 
 ## Immediate target
@@ -46,7 +49,10 @@ Do not begin parsing until the M1 exit criterion passes.
 - Source spans are byte offsets; line/column rendering arrives with M1
   diagnostics.
 - The proposed language examples document direction, not shipped syntax.
-- No Salesforce schema, Apex Exec, Salesforce CLI, or org integration exists.
+- No Salesforce schema, Apex Exec, Salesforce CLI, org, test execution,
+  coverage, or generated-test integration exists.
+- The documented Apex Exec protocol and generated-test workflow are planned
+  interfaces, not bootstrap behavior.
 
 ## Handoff checklist
 

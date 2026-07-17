@@ -146,11 +146,39 @@ Behavior should be exercised at the narrowest useful layer:
 - Emitter golden tests for deterministic, readable Apex
 - Project tests for discovery, dependencies, caching, and manifests
 - CLI tests for filesystem behavior and rendered diagnostics
+- Verification-adapter contract tests for protocol versions, declared
+  capabilities, and passed/unsupported/failed outcomes
 - Differential fixtures for Apex Exec and Salesforce compatibility
+- Generated-test planner tests for stable branch goals, schema-valid fixtures,
+  oracle provenance, candidate minimization, and stale-output detection
 
 Full-program `.zen` scenarios should combine several supported features and run
 through the public compiler API and built CLI. Keep narrow edge cases in the
 owning module.
+
+### Verification backend rules
+
+- Execute emitted Apex for user-facing local tests; do not add a separate
+  Zenith HIR runtime as a shortcut.
+- Keep `check` and `build` independent of Apex Exec availability.
+- Pin the backend protocol and record its declared capability profile.
+- Treat unsupported backend surface as a distinct verification outcome, not a
+  Zenith compile failure or a pass.
+- Map backend diagnostics, stack frames, and coverage through generated Apex
+  spans before rendering Zenith locations.
+- Keep Salesforce differential evidence distinct from local backend evidence.
+
+### Generated-test rules
+
+- Give every generated case a stable identity, branch goal, provenance, and
+  oracle class.
+- Emit a managed trusted test only when its assertion follows from language
+  semantics or an explicit contract, invariant, or example.
+- Emit ambiguous cases as editable drafts, or retain them as non-deployable
+  local coverage probes.
+- Never silently convert observed behavior into a normative assertion.
+- Never report code coverage as equivalent to behavioral correctness.
+- Do not overwrite an adopted developer-owned test during regeneration.
 
 ## Generated-output review
 
@@ -162,6 +190,9 @@ Generated Apex is reviewable product output:
 - Preserve source maps through helpers and desugared statements.
 - Test behavior, not only text, when a compatible execution backend exists.
 - Never hand-edit build output to make a fixture pass.
+- Record verification backend versions, capabilities, and result fingerprints.
+- Keep managed generated tests and temporary coverage probes distinguishable in
+  the manifest and generated tree.
 
 ## Documentation ownership
 
