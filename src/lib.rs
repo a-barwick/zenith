@@ -5,7 +5,11 @@
 //! handling to later compiler phases.
 
 pub mod diagnostic;
+pub mod lexer;
 pub mod source;
+pub mod token;
 
-pub use diagnostic::{Diagnostic, Phase, Severity};
-pub use source::{SourceFile, SourceId, SourceMap, Span};
+pub use diagnostic::{Diagnostic, Phase, Severity, SourceLabel, render_diagnostics};
+pub use lexer::{LexResult, lex};
+pub use source::{SourceFile, SourceId, SourceLocation, SourceMap, Span};
+pub use token::{Identifier, Token, TokenKind, render_tokens};
