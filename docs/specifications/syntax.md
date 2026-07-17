@@ -106,8 +106,9 @@ header therefore requires the explicit `type identifier : expression` shape.
 M2 records source syntax and precedence without selecting calls, members, or
 types. From tightest to loosest, the supported expression forms are:
 
-1. primary expressions: identifiers, integers, strings, `true`, `false`,
-   `null`, `this`, `super`, parenthesized expressions, and `new type(arguments)`
+1. primary expressions: identifiers, the Apex `System` namespace word,
+   integers, strings, `true`, `false`, `null`, `this`, `super`,
+   parenthesized expressions, and `new type(arguments)`
 2. postfix calls, member access, safe member access reservation, indexing,
    postfix `++`, and postfix `--`
 3. prefix `!`, `~`, `+`, `-`, `++`, and `--`

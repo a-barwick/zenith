@@ -1,0 +1,10 @@
+compilation-unit @1:1..6:1
+  class HelloZenith modifiers=[public] @1:1..5:2
+    method run modifiers=[public, static] @2:5..4:6
+      return-type void @2:19..2:23
+      block @2:30..4:6
+        expression-statement @3:9..3:40
+          call @3:9..3:39
+            member debug @3:9..3:21
+              name System @3:9..3:15
+            string "Hello, Zenith!" @3:22..3:38

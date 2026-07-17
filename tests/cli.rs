@@ -12,9 +12,11 @@ Usage:
   zenith [--help]
   zenith --version
   zenith tokens <file.zen>
+  zenith ast <file.zen>
 
 Commands:
   tokens    Print the stable lexical token stream for one source file.
+  ast       Print the stable parsed syntax tree for one source file.
 ";
 
 fn zenith() -> Command {
@@ -144,6 +146,38 @@ fn tokenizes_broad_lexical_fixture_with_stable_golden_output() {
 }
 
 #[test]
+fn parses_hello_fixture_with_stable_golden_output() {
+    let output = zenith()
+        .args(["ast"])
+        .arg(fixture("examples/hello.zen"))
+        .output()
+        .expect("run zenith ast");
+
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        include_str!("golden/hello.ast")
+    );
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn parses_broad_m2_fixture_with_stable_golden_output() {
+    let output = zenith()
+        .args(["ast"])
+        .arg(fixture("examples/lexical-baseline.zen"))
+        .output()
+        .expect("run zenith ast");
+
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        include_str!("golden/lexical-baseline.ast")
+    );
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
 fn reports_tokens_usage_errors_with_status_two() {
     for arguments in [vec!["tokens"], vec!["tokens", "one.zen", "two.zen"]] {
         let output = zenith().args(arguments).output().expect("run zenith");
@@ -153,6 +187,20 @@ fn reports_tokens_usage_errors_with_status_two() {
         assert_eq!(
             String::from_utf8(output.stderr).unwrap(),
             "error: usage: zenith tokens <file.zen>\n"
+        );
+    }
+}
+
+#[test]
+fn reports_ast_usage_errors_with_status_two() {
+    for arguments in [vec!["ast"], vec!["ast", "one.zen", "two.zen"]] {
+        let output = zenith().args(arguments).output().expect("run zenith");
+
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            "error: usage: zenith ast <file.zen>\n"
         );
     }
 }
@@ -198,6 +246,55 @@ fn reports_invalid_utf8_as_a_source_diagnostic() {
     assert!(stderr.starts_with("error[source.invalid-utf8]: "));
     assert!(stderr.contains("  = note: invalid UTF-8 begins at byte 5\n"));
     assert!(stderr.ends_with("  = help: save Zenith source as UTF-8\n"));
+}
+
+#[test]
+fn ast_reports_lexical_errors_before_parsing_and_suppresses_output() {
+    let source = TempSource::new(b"class Broken { void run() { $; } }");
+    let output = zenith()
+        .arg("ast")
+        .arg(source.path())
+        .output()
+        .expect("run zenith ast");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.starts_with("error[lex.invalid-character]:"));
+    assert!(!stderr.contains("parse."));
+}
+
+#[test]
+fn ast_renders_ordered_recovered_parse_diagnostics_and_suppresses_tree() {
+    let source = TempSource::new(
+        b"class Broken {
+            Integer = 1;
+            void run() {
+                Integer missing = ;
+                return missing
+                missing = 2;
+            }
+            String recovered;
+        }",
+    );
+    let output = zenith()
+        .arg("ast")
+        .arg(source.path())
+        .output()
+        .expect("run zenith ast");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    let identifier = stderr.find("parse.expected-identifier").unwrap();
+    let expression = stderr.find("parse.expected-expression").unwrap();
+    let token = stderr.find("parse.expected-token").unwrap();
+    assert!(identifier < expression);
+    assert!(expression < token);
+    assert!(stderr.contains("error[parse.expected-identifier]:"));
+    assert!(stderr.contains("error[parse.expected-expression]:"));
+    assert!(stderr.contains("error[parse.expected-token]:"));
+    assert!(!stderr.contains("lex."));
 }
 
 #[test]
