@@ -9,15 +9,19 @@ privilege transitions, partial DML handling, and code paths that can exceed
 governor limits. It keeps the Salesforce deployment model rather than
 introducing a separate production runtime.
 
-The repository has completed its bootstrap milestone. It currently provides
-source identity and diagnostic foundations, automated Rust quality gates, and
-a tested `--help`/`--version` CLI shell. The active M1 lexer milestone now has
-explicit lexical and diagnostic contracts plus a baseline token fixture. No
-language compilation is claimed yet.
+The repository has completed its lexical milestone. It now tokenizes the
+selected Apex-shaped baseline with case-insensitive names, stable source spans,
+recoverable diagnostics, and deterministic CLI output. Parsing and language
+compilation are not implemented yet.
 
 ```console
 $ cargo run -- --version
 zenith 0.1.0
+
+$ cargo run -- tokens examples/hello.zen
+1:1..1:7	keyword(public)	"public"
+1:8..1:13	keyword(class)	"class"
+1:14..1:25	identifier(hellozenith)	"HelloZenith"
 ```
 
 The intended workflow is:

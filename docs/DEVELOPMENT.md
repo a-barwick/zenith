@@ -7,7 +7,7 @@
 - Git
 
 `rust-toolchain.toml` pins Rust 1.88.0 with `rustfmt` and Clippy so local and CI
-quality gates use the declared minimum toolchain. The bootstrap crate has no
+quality gates use the declared minimum toolchain. The compiler crate has no
 third-party dependencies. Salesforce CLI and Apex Exec become optional
 verification tools only when their roadmap integrations arrive.
 
@@ -20,8 +20,8 @@ cargo run -- --version
 ```
 
 The smallest source fixture is `examples/hello.zen`; the broader M1/M2 token
-baseline is `examples/lexical-baseline.zen`. The active M1 milestone will
-introduce:
+baseline is `examples/lexical-baseline.zen`. Inspect either through the shipped
+M1 command:
 
 ```bash
 cargo run -- tokens examples/hello.zen

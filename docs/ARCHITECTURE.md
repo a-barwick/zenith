@@ -1,25 +1,29 @@
 # Architecture
 
-## Current foundation
+## Current compiler front end
 
-The current foundation contains only the boundaries needed by the active lexer
-milestone:
+M1 implements the complete source-to-token boundary:
 
 ```text
-CLI help/version
+CLI help/version/tokens
 
 SourceMap
   ├── SourceFile
   ├── SourceId
-  └── file-aware byte Span
+  ├── file-aware byte Span
+  └── Unicode-scalar source locations
+          │
+          ▼
+Lexer ───► tokens with exact spans, canonical names, and decoded strings
 
 Diagnostic
-  ├── Severity
-  └── owning compiler Phase
+  ├── stable code, severity, and owning phase
+  ├── primary/secondary labels, notes, and help
+  └── deterministic source rendering
 ```
 
-There is intentionally no placeholder lexer, parser, semantic checker, or
-emitter. Each module arrives with the milestone that owns executable behavior.
+There is intentionally no placeholder parser, semantic checker, or emitter.
+Each module arrives with the milestone that owns executable behavior.
 
 ## Product and runtime boundary
 
@@ -222,16 +226,17 @@ and its trust boundary is recorded in
 
 | Module | Responsibility |
 |---|---|
-| `source` | Session-local file identities, byte spans, and source slicing |
-| `diagnostic` | Severity and explicit compiler-phase ownership |
-| `lib` | Public compiler-foundation façade |
-| `main` | Bootstrap CLI argument and process behavior |
+| `source` | Session-local file identities, byte spans, source slicing, and line/column views |
+| `diagnostic` | Stable diagnostics, labels, ordering, and console rendering |
+| `token` | Token, identifier, canonical-name, and stable inspection representation |
+| `lexer` | Recoverable source-to-token conversion |
+| `lib` | Public compiler front-end façade |
+| `main` | CLI argument, source loading, and inspection behavior |
 
 ## Planned module boundaries
 
 | Module | Responsibility |
 |---|---|
-| `token` / `lexer` | Token representation and source-to-token conversion |
 | `ast` / `parser` | Immutable parsed syntax and grammar |
 | `resolve` | Cross-file names, scopes, imports, and symbol identities |
 | `hir` / `types` | Checked expressions, declarations, conversions, and types |

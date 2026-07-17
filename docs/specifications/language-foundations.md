@@ -2,8 +2,8 @@
 
 ## Status
 
-Source identity and diagnostic phase types are **Implemented**. All source
-language rules below are **Planned** unless marked otherwise.
+Source identity, lexical names, and diagnostics are **Implemented**. Parsed and
+semantic language rules below are **Planned** unless marked otherwise.
 
 ## Source files
 
@@ -15,8 +15,9 @@ source.
 
 ## Names
 
-Zenith identifiers are case-insensitive because the Apex target is
-case-insensitive. Two declarations that differ only in case conflict.
+Zenith identifier tokens carry case-insensitive canonical names because the
+Apex target is case-insensitive. The M2/M3 declaration rules will reject two
+declarations that differ only in case.
 
 The M1 identifier character and canonicalization rules are defined in
 `lexical-structure.md`.
@@ -32,7 +33,7 @@ syntax.
 
 ## Baseline syntax
 
-The early compiler accepts a deliberately selected Apex-shaped baseline:
+M2 and M3 target a deliberately selected Apex-shaped baseline:
 
 - classes, fields, properties, methods, and constructors
 - primitive and collection types
