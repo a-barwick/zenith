@@ -2,8 +2,8 @@
 
 ## Current foundation
 
-The bootstrap repository contains only the boundaries needed by the active
-lexer milestone:
+The current foundation contains only the boundaries needed by the active lexer
+milestone:
 
 ```text
 CLI help/version
@@ -27,7 +27,7 @@ emitter. Each module arrives with the milestone that owns executable behavior.
 Zenith source + project configuration + Salesforce metadata
     │
     ▼
-Source loader ─► stable file identities and source text
+Source loader ─► stable file identities, line indexes, and source text
     │
     ▼
 Lexer ─────────► tokens with spelling, canonical names, and spans
@@ -48,10 +48,13 @@ Schema checker ► query shapes, SObject states, and security provenance
 Effect checker ► resource summaries and checked effect contracts
     │
     ▼
-Lowering ──────► explicit Apex-oriented IR and generated helpers
+Lowering ──────► explicit Apex-oriented IR and collision-checked helpers
     │
     ▼
-Apex emitter ─► formatted SFDX source, source maps, and build manifest
+Apex emitter ─► formatted SFDX source, metadata, and source-map segments
+    │
+    ▼
+Project output ► deterministic layout, manifest, and compatibility evidence
     │
     ├──► Apex Exec local checks/tests where supported
     └──► Salesforce validation as the final oracle
@@ -68,11 +71,17 @@ Source management owns file identities, byte ranges, line/column mapping, and
 source text. Later project caching may add content identities, but compiler
 phases must never infer file ownership from concatenated offsets.
 
+The current `SourceMap::add` API assigns an identity to each loaded entry. M3
+project caching must retain one session-local identity for a canonical project
+path across reparses rather than allocating a new identity for every edit.
+
 ### Lexing
 
 The lexer recognizes spelling and token boundaries. It canonicalizes names for
 case-insensitive lookup while retaining exact source spelling. It does not
 classify an identifier by scope or type.
+
+Its observable contract is `docs/specifications/lexical-structure.md`.
 
 ### Parsing
 
@@ -103,19 +112,30 @@ diagnostics.
 
 Lowering makes every Zenith-only construct explicit in an Apex-oriented IR.
 It may generate helper declarations, specialize generics, and convert
-expression-level constructs into statements. It does not format text.
+expression-level constructs into statements. Stable semantic helper identities
+and collision checks are complete before emission. Lowering does not format
+text.
 
 ### Apex emission
 
 The emitter serializes valid Apex IR deterministically. It owns formatting,
-generated names, manifests, and source-map segments. It does not repair invalid
-typed state or invent lowering semantics.
+target file names, companion Salesforce metadata, and source-map segments. It
+does not allocate semantic helper identities, repair invalid typed state, or
+invent lowering semantics.
+
+### Project orchestration
+
+Project orchestration owns configuration, required target API version,
+discovery, dependency order, caches, output layout, and `build.json`. It invokes
+phases without absorbing their semantic logic and records verification evidence
+without rewriting compiler results.
 
 ### Verification
 
 Verification checks generated artifacts without weakening the compiler's own
 guarantees. Apex Exec can provide fast local feedback for its compatible
-surface; Salesforce remains the final oracle for deployment behavior.
+surface through the boundary in `docs/APEX_EXEC.md`; Salesforce remains the
+final oracle for deployment behavior.
 
 ## Current modules
 
@@ -137,8 +157,8 @@ surface; Salesforce remains the final oracle for deployment behavior.
 | `schema` / `query` | Salesforce metadata normalization and query shapes |
 | `effects` | Resource inference, contracts, and call-path diagnostics |
 | `lower` | Zenith-to-Apex semantic desugaring |
-| `apex_ir` / `emit` | Valid target representation and deterministic Apex text |
-| `project` | Configuration, dependency graph, caching, and build manifests |
+| `apex_ir` / `emit` | Valid target representation, Apex text, companion metadata, and source-map segments |
+| `project` | Configuration, dependency graph, caching, output layout, and build manifests |
 | `verify` | Apex Exec and Salesforce validation adapters |
 
 Module names can evolve through implementation, but the ownership boundaries
@@ -193,6 +213,8 @@ The target layout is:
 .zenith/
   generated/
     force-app/main/default/classes/
+      Example.cls
+      Example.cls-meta.xml
   build.json
   source-map.json
 ```
@@ -203,11 +225,13 @@ are the exception and exist specifically to review emitter behavior.
 `build.json` should record at least:
 
 - compiler version
+- target Salesforce API version
 - configuration and schema fingerprints
 - input content identities
 - generated files and semantic owners
 - runtime-helper requirements, if any
 - compatibility profile
+- external verifier version, capability profile, and result when one ran
 
 ## Compatibility boundaries
 
@@ -220,6 +244,14 @@ Zenith features fall into four lowering classes:
 
 Runtime-assisted features carry a higher adoption cost and should be rare.
 Every shipped feature declares its class in `docs/COMPATIBILITY.md`.
+
+## Apex Exec boundary
+
+Apex Exec is a separate local Apex runtime and an optional verification backend,
+not a Zenith compiler phase or source-language dependency. M3 may use a pinned
+compile smoke check after emission. Rich source-mapped test integration waits
+for the versioned protocol required by M10 and ADR 0004. Backend unsupported
+results remain visible and never become compiler success.
 
 ## Performance direction
 

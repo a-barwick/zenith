@@ -9,10 +9,11 @@ privilege transitions, partial DML handling, and code paths that can exceed
 governor limits. It keeps the Salesforce deployment model rather than
 introducing a separate production runtime.
 
-The repository is at its bootstrap milestone. It currently provides source
-identity and diagnostic foundations plus a tested `--help`/`--version` CLI
-shell. The active M1 milestone begins the lexer. No language compilation is
-claimed yet.
+The repository has completed its bootstrap milestone. It currently provides
+source identity and diagnostic foundations, automated Rust quality gates, and
+a tested `--help`/`--version` CLI shell. The active M1 lexer milestone now has
+explicit lexical and diagnostic contracts plus a baseline token fixture. No
+language compilation is claimed yet.
 
 ```console
 $ cargo run -- --version
@@ -76,6 +77,8 @@ surface, not a disposable implementation detail.
 - [Architecture](docs/ARCHITECTURE.md) — current and target compiler design
 - [Compatibility](docs/COMPATIBILITY.md) — shipped language and lowering claims
 - [Development](docs/DEVELOPMENT.md) — human and agentic working loop
+- [Apex Exec relationship](docs/APEX_EXEC.md) — comparison and verification
+  boundary
 - [Decisions](docs/decisions/README.md) — durable architectural rationale
 - [Specifications](docs/specifications/README.md) — intended language behavior
 

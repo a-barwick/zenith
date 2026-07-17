@@ -1,8 +1,8 @@
 //! Compiler foundations for the Zenith language.
 //!
-//! The repository is intentionally at its bootstrap milestone. Source identity
-//! and diagnostics exist so the lexer can be implemented without coupling
-//! source handling to later compiler phases.
+//! The bootstrap milestone is complete. Source identity and diagnostic
+//! foundations now support the active M1 lexer work without coupling source
+//! handling to later compiler phases.
 
 pub mod diagnostic;
 pub mod source;

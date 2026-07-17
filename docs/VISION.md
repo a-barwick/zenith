@@ -42,8 +42,9 @@ without deploying.
 zenith build
 ```
 
-The compiler emits deterministic SFDX-compatible Apex, a build manifest, and
-source maps under `.zenith/generated/`.
+The compiler emits deterministic SFDX-compatible Apex and companion metadata
+for the configured Salesforce API version under `.zenith/generated/`, with a
+build manifest and source maps under `.zenith/`.
 
 ```bash
 zenith test
@@ -129,7 +130,7 @@ target diagnostics and test failures back to Zenith source.
 
 - A baseline Apex-shaped class compiles to deployable Apex with stable source
   maps.
-- A selected-but-unqueried field access fails during Zenith checking.
+- Access to a field not selected by the query fails during Zenith checking.
 - A query hidden under a loop or helper call produces a useful effect
   diagnostic.
 - Typed IDs prevent cross-object mistakes without runtime wrappers.
