@@ -1,0 +1,17 @@
+# Rust build artifacts
+/target/
+
+# Zenith generated output
+/.zenith/
+
+# Editor and operating-system metadata
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local environment files
+.env
+.env.*
+!.env.example

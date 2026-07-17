@@ -1,0 +1,5 @@
+public class HelloZenith {
+    public static void run() {
+        System.debug('Hello, Zenith!');
+    }
+}
