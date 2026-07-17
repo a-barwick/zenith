@@ -14,23 +14,36 @@ Compiler commands begin with roadmap milestone M1.
 ";
 
 fn main() -> ExitCode {
-    let arguments: Vec<String> = env::args().skip(1).collect();
+    let arguments: Vec<_> = env::args_os().skip(1).collect();
 
     match arguments.as_slice() {
         [] => {
             print!("{HELP}");
             ExitCode::SUCCESS
         }
-        [argument] if matches!(argument.as_str(), "help" | "-h" | "--help") => {
+        [argument]
+            if matches!(
+                argument.to_str(),
+                Some("help") | Some("-h") | Some("--help")
+            ) =>
+        {
             print!("{HELP}");
             ExitCode::SUCCESS
         }
-        [argument] if matches!(argument.as_str(), "version" | "-V" | "--version") => {
+        [argument]
+            if matches!(
+                argument.to_str(),
+                Some("version") | Some("-V") | Some("--version")
+            ) =>
+        {
             println!("zenith {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
         [command, ..] => {
-            eprintln!("error: unknown or unavailable command `{command}`");
+            eprintln!(
+                "error: unknown or unavailable command `{}`",
+                command.to_string_lossy()
+            );
             eprintln!("Run `zenith --help` for the bootstrap command surface.");
             ExitCode::from(2)
         }

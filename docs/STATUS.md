@@ -9,12 +9,17 @@ M1 — Lexical core and source diagnostics
 ## Completed
 
 - Rust binary and library crate with no third-party dependencies
+- Rust 1.88.0 toolchain pin plus GitHub Actions gates for formatting, tests,
+  Clippy, and current-stable test compatibility
 - Repository-level product, roadmap, architecture, compatibility, development,
   decision, and specification documentation
-- Tested `zenith --help` and `zenith --version` bootstrap CLI
-- Session-local source identities, file-aware byte spans, and source slicing
+- Tested bootstrap help/version aliases, no-argument help, unavailable-command
+  behavior, and non-UTF-8 argument handling
+- Session-local source identities, ordered file-aware byte spans, and safe
+  source slicing at UTF-8 boundaries
 - Compiler diagnostic categories for source, lexing, parsing, resolution,
-  typing, effects, lowering, emission, and project orchestration
+  typing, schema checking, effects, lowering, emission, verification, and
+  project orchestration
 - Initial decisions covering compile-to-Apex deployment, case-insensitive
   names, and generated Apex as a product surface
 - A baseline `.zen` example reserved for the first compiler slice
@@ -47,6 +52,8 @@ Do not begin parsing until the M1 exit criterion passes.
   diagnostics.
 - The proposed language examples document direction, not shipped syntax.
 - No Salesforce schema, Apex Exec, Salesforce CLI, or org integration exists.
+- No repository license or crate-publication policy has been selected; future
+  tasks must not infer one.
 
 ## Handoff checklist
 

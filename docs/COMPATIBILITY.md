@@ -34,9 +34,10 @@ does not yet emit Apex.
 |---|---|---|---|
 | `zenith --help` | Local | None | Bootstrap CLI only |
 | `zenith --version` | Local | None | Prints the crate version |
+| Local and CI verification | Local | None | Rust 1.88.0 fmt/test/Clippy gates plus current-stable tests |
 | Source identities | Local | None | Stable within one compiler session |
-| File-aware byte spans | Local | None | Line/column rendering planned in M1 |
-| Phase-owned diagnostics | Local | None | Source through project phases represented |
+| File-aware byte spans | Local | None | Ordered construction and UTF-8-safe slicing; line/column rendering planned in M1 |
+| Phase-owned diagnostics | Local | None | Source, language, schema, verification, and project phases represented |
 | `.zen` compilation | Planned | Native/varies | Begins with M1 lexing; no source is accepted today |
 
 ## Language surface

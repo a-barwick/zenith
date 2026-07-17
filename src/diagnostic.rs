@@ -10,9 +10,11 @@ pub enum Phase {
     Parse,
     Resolve,
     Type,
+    Schema,
     Effect,
     Lower,
     Emit,
+    Verify,
     Project,
 }
 
@@ -24,9 +26,11 @@ impl fmt::Display for Phase {
             Self::Parse => "parse",
             Self::Resolve => "resolve",
             Self::Type => "type",
+            Self::Schema => "schema",
             Self::Effect => "effect",
             Self::Lower => "lower",
             Self::Emit => "emit",
+            Self::Verify => "verify",
             Self::Project => "project",
         };
         formatter.write_str(name)
@@ -37,6 +41,15 @@ impl fmt::Display for Phase {
 pub enum Severity {
     Error,
     Warning,
+}
+
+impl fmt::Display for Severity {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+        })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -72,12 +85,37 @@ mod tests {
     use super::{Diagnostic, Phase, Severity};
 
     #[test]
-    fn diagnostics_retain_phase_and_severity() {
-        let diagnostic = Diagnostic::error(Phase::Type, "nullable value used here", None);
+    fn renders_every_phase_name() {
+        let phases = [
+            (Phase::Source, "source"),
+            (Phase::Lex, "lex"),
+            (Phase::Parse, "parse"),
+            (Phase::Resolve, "resolve"),
+            (Phase::Type, "type"),
+            (Phase::Schema, "schema"),
+            (Phase::Effect, "effect"),
+            (Phase::Lower, "lower"),
+            (Phase::Emit, "emit"),
+            (Phase::Verify, "verify"),
+            (Phase::Project, "project"),
+        ];
 
-        assert_eq!(diagnostic.severity, Severity::Error);
-        assert_eq!(diagnostic.phase, Phase::Type);
-        assert_eq!(diagnostic.message, "nullable value used here");
-        assert_eq!(diagnostic.phase.to_string(), "type");
+        for (phase, expected) in phases {
+            assert_eq!(phase.to_string(), expected);
+        }
+    }
+
+    #[test]
+    fn diagnostics_retain_phase_and_severity() {
+        let error = Diagnostic::error(Phase::Type, "nullable value used here", None);
+        let warning = Diagnostic::warning(Phase::Verify, "backend unavailable", None);
+
+        assert_eq!(error.severity, Severity::Error);
+        assert_eq!(error.phase, Phase::Type);
+        assert_eq!(error.message, "nullable value used here");
+        assert_eq!(error.severity.to_string(), "error");
+        assert_eq!(warning.severity, Severity::Warning);
+        assert_eq!(warning.phase, Phase::Verify);
+        assert_eq!(warning.severity.to_string(), "warning");
     }
 }

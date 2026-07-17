@@ -6,9 +6,10 @@
 - Cargo
 - Git
 
-The bootstrap crate has no third-party dependencies. Salesforce CLI and Apex
-Exec become optional verification tools only when their roadmap integrations
-arrive.
+`rust-toolchain.toml` pins Rust 1.88.0 with `rustfmt` and Clippy so local and CI
+quality gates use the declared minimum toolchain. The bootstrap crate has no
+third-party dependencies. Salesforce CLI and Apex Exec become optional
+verification tools only when their roadmap integrations arrive.
 
 ## Build and inspect
 
@@ -38,6 +39,8 @@ cargo clippy --all-targets -- -D warnings
 
 Run the relevant CLI example after changing command behavior. Once emission
 exists, inspect the generated Apex and run its available compiler verification.
+GitHub Actions runs the required gates with Rust 1.88.0 and also executes the
+test suite on the current stable Rust release.
 
 ## Git workflow
 

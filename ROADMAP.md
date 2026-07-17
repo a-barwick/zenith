@@ -13,6 +13,7 @@ Status values: **Complete**, **Active**, **Planned**, and **Deferred**.
 ### Scope
 
 - Rust library and binary crate
+- Pinned Rust toolchain and automated formatting, test, and lint verification
 - Source file identities and byte spans
 - Phase-owned diagnostics
 - Bootstrap CLI help and version behavior
@@ -23,8 +24,8 @@ Status values: **Complete**, **Active**, **Planned**, and **Deferred**.
 ### Exit criterion
 
 The crate builds without third-party dependencies, its unit and CLI smoke tests
-pass, and a new Codex task can identify the active milestone and immediate work
-without reconstructing project intent.
+pass locally and in CI, and a new Codex task can identify the active milestone
+and immediate work without reconstructing project intent.
 
 ## M1 — Lexical core and source diagnostics
 
