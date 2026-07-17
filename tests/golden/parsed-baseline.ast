@@ -1,0 +1,120 @@
+compilation-unit @1:1..45:1
+  class ParsedBaseline modifiers=[public, virtual] @1:1..44:2
+    extends-type BaseService @1:45..1:56
+    implements-type Runnable @1:68..1:76
+    field cache modifiers=[private] @2:5..2:47
+      type Map<String, List<Integer>>? @2:13..2:40
+    field threshold modifiers=[private] @3:5..3:36
+      type Integer @3:13..3:20
+      integer 10 @3:33..3:35
+    property label modifiers=[public] @4:5..4:46
+      type String @4:12..4:18
+      accessor get @4:27..4:31
+      accessor set modifiers=[private] @4:32..4:44
+    constructor ParsedBaseline modifiers=[public] @6:5..8:6
+      parameter label @6:27..6:39
+        type String @6:27..6:33
+      block @6:41..8:6
+        expression-statement @7:9..7:28
+          assignment = @7:9..7:27
+            member label @7:9..7:19
+              this @7:9..7:13
+            name label @7:22..7:27
+    method calculate modifiers=[public] @10:5..39:6
+      return-type Integer @10:12..10:19
+      parameter values @10:30..10:50
+        type List<Integer> @10:30..10:43
+      block @10:52..39:6
+        variable total @11:9..11:27
+          type Integer @11:9..11:16
+          integer 0 @11:25..11:26
+        for @13:9..15:10
+          for-variable index @13:14..13:31
+            type Integer @13:14..13:21
+            integer 0 @13:30..13:31
+          binary < @13:33..13:54
+            name index @13:33..13:38
+            call @13:41..13:54
+              member size @13:41..13:52
+                name values @13:41..13:47
+          postfix ++ @13:56..13:63
+            name index @13:56..13:61
+          block @13:65..15:10
+            expression-statement @14:13..14:36
+              assignment += @14:13..14:35
+                name total @14:13..14:18
+                index @14:22..14:35
+                  name values @14:22..14:28
+                  name index @14:29..14:34
+        enhanced-for value @17:9..21:10
+          type Integer @17:14..17:21
+          name values @17:30..17:36
+          block @17:38..21:10
+            if @18:13..20:14
+              binary < @18:17..18:26
+                name value @18:17..18:22
+                integer 0 @18:25..18:26
+              block @18:28..20:14
+                continue @19:17..19:26
+        while @23:9..28:10
+          binary < @23:16..23:33
+            name total @23:16..23:21
+            name threshold @23:24..23:33
+          block @23:35..28:10
+            expression-statement @24:13..24:21
+              postfix ++ @24:13..24:20
+                name total @24:13..24:18
+            if @25:13..27:14
+              binary == @25:17..25:28
+                name total @25:17..25:22
+                integer 20 @25:26..25:28
+              block @25:30..27:14
+                break @26:17..26:23
+        do-while @30:9..32:37
+          block @30:12..32:10
+            expression-statement @31:13..31:21
+              postfix -- @31:13..31:20
+                name total @31:13..31:18
+          binary > @32:18..32:35
+            name total @32:18..32:23
+            name threshold @32:26..32:35
+        variable ready @34:9..34:40
+          type Boolean @34:9..34:16
+          binary && @34:25..34:39
+            boolean true @34:25..34:29
+            unary ! @34:33..34:39
+              boolean false @34:34..34:39
+        variable boxed @35:9..35:39
+          type Object @35:9..35:15
+          new @35:24..35:38
+            type Box @35:28..35:31
+            name total @35:32..35:37
+        expression-statement @36:9..36:36
+          assignment = @36:9..36:35
+            name total @36:9..36:14
+            conditional @36:17..36:35
+              name ready @36:17..36:22
+              name total @36:25..36:30
+              unary - @36:33..36:35
+                integer 1 @36:34..36:35
+        expression-statement @37:9..37:55
+          call @37:9..37:54
+            member debug @37:9..37:21
+              name System @37:9..37:15
+            binary + @37:22..37:53
+              binary + @37:22..37:38
+                member label @37:22..37:32
+                  this @37:22..37:26
+                string ":" @37:35..37:38
+              safe-member value @37:41..37:53
+                name boxed @37:41..37:46
+        return @38:9..38:27
+          binary ?? @38:16..38:26
+            name total @38:16..38:21
+            integer 0 @38:25..38:26
+    method fail modifiers=[public] @41:5..43:6
+      return-type void @41:12..41:16
+      block @41:24..43:6
+        throw @42:9..42:29
+          new @42:15..42:28
+            type Problem @42:19..42:26

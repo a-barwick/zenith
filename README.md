@@ -9,10 +9,10 @@ privilege transitions, partial DML handling, and code paths that can exceed
 governor limits. It keeps the Salesforce deployment model rather than
 introducing a separate production runtime.
 
-The repository has completed its lexical milestone. It now tokenizes the
-selected Apex-shaped baseline with case-insensitive names, stable source spans,
-recoverable diagnostics, and deterministic CLI output. Parsing and language
-compilation are not implemented yet.
+The repository has completed its parsed-syntax milestone. It now tokenizes and
+parses the selected Apex-shaped baseline into immutable, source-spanned syntax
+with a shared visitor, localized recovery, and deterministic CLI output.
+Resolution, type checking, and Apex emission are not implemented yet.
 
 ```console
 $ cargo run -- --version
@@ -22,6 +22,11 @@ $ cargo run -- tokens examples/hello.zen
 1:1..1:7	keyword(public)	"public"
 1:8..1:13	keyword(class)	"class"
 1:14..1:25	identifier(hellozenith)	"HelloZenith"
+
+$ cargo run -- ast examples/hello.zen
+compilation-unit @1:1..6:1
+  class HelloZenith modifiers=[public] @1:1..5:2
+    method run modifiers=[public, static] @2:5..4:6
 ```
 
 The intended workflow is:

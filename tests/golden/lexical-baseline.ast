@@ -1,0 +1,37 @@
+compilation-unit @2:1..19:1
+  class LexicalBaseline modifiers=[public, with sharing] @2:1..18:2
+    property label modifiers=[public] @3:5..3:46
+      type String @3:12..3:18
+      accessor get @3:27..3:31
+      accessor set modifiers=[private] @3:32..3:44
+    method sum modifiers=[public, static] @5:5..17:6
+      return-type Integer @5:19..5:26
+      parameter values @5:31..5:51
+        type List<Integer> @5:31..5:44
+      block @5:53..17:6
+        variable total @6:9..6:27
+          type Integer @6:9..6:16
+          integer 0 @6:25..6:26
+        enhanced-for value @7:9..12:10
+          type Integer @7:14..7:21
+          name values @7:30..7:36
+          block @7:38..12:10
+            if @8:13..10:14
+              binary < @8:17..8:26
+                name value @8:17..8:22
+                integer 0 @8:25..8:26
+              block @8:28..10:14
+                continue @9:17..9:26
+            expression-statement @11:13..11:28
+              assignment += @11:13..11:27
+                name total @11:13..11:18
+                name value @11:22..11:27
+        expression-statement @15:9..15:43
+          call @15:9..15:42
+            member debug @15:9..15:21
+              name System @15:9..15:15
+            binary + @15:22..15:41
+              string "Résumé:\n" @15:22..15:33
+              name total @15:36..15:41
+        return @16:9..16:22
+          name total @16:16..16:21

@@ -2,8 +2,9 @@
 
 ## Status
 
-Source identity, lexical names, and diagnostics are **Implemented**. Parsed and
-semantic language rules below are **Planned** unless marked otherwise.
+Source identity, lexical names, diagnostics, and the M2 parsed baseline are
+**Implemented**. Semantic language rules below are **Planned** unless marked
+otherwise.
 
 ## Source files
 
@@ -33,7 +34,7 @@ syntax.
 
 ## Baseline syntax
 
-M2 and M3 target a deliberately selected Apex-shaped baseline:
+M2 implements a deliberately selected Apex-shaped parsed baseline:
 
 - classes, fields, properties, methods, and constructors
 - primitive and collection types
@@ -41,8 +42,9 @@ M2 and M3 target a deliberately selected Apex-shaped baseline:
   flow
 - ordinary access and static/instance modifiers
 
-The goal is not immediate full Apex parsing. Unsupported syntax is diagnosed
-explicitly.
+The complete accepted grammar and recovery contract are defined in
+`syntax.md`. Parsing does not imply semantic or target compatibility; M3 owns
+resolution, type checking, lowering, and emission.
 
 ## Existing Apex interoperability
 

@@ -1,0 +1,44 @@
+public virtual class ParsedBaseline extends BaseService implements Runnable {
+    private Map<String, List<Integer>>? cache;
+    private Integer threshold = 10;
+    public String label { get; private set; }
+
+    public ParsedBaseline(String label) {
+        this.label = label;
+    }
+
+    public Integer calculate(List<Integer> values) {
+        Integer total = 0;
+
+        for (Integer index = 0; index < values.size(); index++) {
+            total += values[index];
+        }
+
+        for (Integer value : values) {
+            if (value < 0) {
+                continue;
+            }
+        }
+
+        while (total < threshold) {
+            total++;
+            if (total == 20) {
+                break;
+            }
+        }
+
+        do {
+            total--;
+        } while (total > threshold);
+
+        Boolean ready = true && !false;
+        Object boxed = new Box(total);
+        total = ready ? total : -1;
+        System.debug(this.label + ':' + boxed?.value);
+        return total ?? 0;
+    }
+
+    public void fail() {
+        throw new Problem();
+    }
+}
