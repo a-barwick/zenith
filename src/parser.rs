@@ -903,7 +903,9 @@ impl<'a> Parser<'a> {
                 self.bump();
                 Some(Expression::new(ExpressionKind::Name(name), span))
             }
-            TokenKind::Keyword(word) if word == "system" => {
+            TokenKind::Keyword(word)
+                if word == "system" || TYPE_KEYWORDS.contains(&word.as_str()) =>
+            {
                 let name = self.identifier_from_current();
                 self.bump();
                 Some(Expression::new(ExpressionKind::Name(name), span))
@@ -1463,8 +1465,10 @@ fn join_spans(start: Span, end: Span) -> Span {
 mod tests {
     use super::{ParseResult, parse};
     use crate::ast::{
-        ClassMember, ExpressionKind, ForInitializer, StatementKind, Visitor, walk_expression,
-        walk_statement, walk_type,
+        ClassMember, ExpressionKind, ForInitializer, StatementKind, Visitor,
+        walk_class_declaration, walk_constructor_declaration, walk_expression,
+        walk_field_declaration, walk_method_declaration, walk_property_accessor,
+        walk_property_declaration, walk_statement, walk_type, walk_variable_declaration,
     };
     use crate::lexer::lex;
     use crate::source::SourceMap;
@@ -1547,6 +1551,7 @@ mod tests {
                 void run() {
                     result = left + right * 2 < ceiling && ready ?? fallback;
                     first = second = new Box(items[0]).value++;
+                    text = String.valueOf(result);
                 }
             }",
         );
@@ -1650,10 +1655,50 @@ mod tests {
             types: usize,
             statements: usize,
             expressions: usize,
+            modifiers: usize,
+            fields: usize,
+            properties: usize,
+            accessors: usize,
+            methods: usize,
+            constructors: usize,
+            variables: usize,
             names: Vec<String>,
         }
 
         impl Visitor for Counter {
+            fn visit_class_declaration(&mut self, node: &crate::ast::ClassDeclaration) {
+                walk_class_declaration(self, node);
+            }
+
+            fn visit_modifier(&mut self, _node: &crate::ast::Modifier) {
+                self.modifiers += 1;
+            }
+
+            fn visit_field_declaration(&mut self, node: &crate::ast::FieldDeclaration) {
+                self.fields += 1;
+                walk_field_declaration(self, node);
+            }
+
+            fn visit_property_declaration(&mut self, node: &crate::ast::PropertyDeclaration) {
+                self.properties += 1;
+                walk_property_declaration(self, node);
+            }
+
+            fn visit_property_accessor(&mut self, node: &crate::ast::PropertyAccessor) {
+                self.accessors += 1;
+                walk_property_accessor(self, node);
+            }
+
+            fn visit_method_declaration(&mut self, node: &crate::ast::MethodDeclaration) {
+                self.methods += 1;
+                walk_method_declaration(self, node);
+            }
+
+            fn visit_constructor_declaration(&mut self, node: &crate::ast::ConstructorDeclaration) {
+                self.constructors += 1;
+                walk_constructor_declaration(self, node);
+            }
+
             fn visit_type(&mut self, node: &crate::ast::Type) {
                 self.types += 1;
                 walk_type(self, node);
@@ -1662,6 +1707,11 @@ mod tests {
             fn visit_statement(&mut self, node: &crate::ast::Statement) {
                 self.statements += 1;
                 walk_statement(self, node);
+            }
+
+            fn visit_variable_declaration(&mut self, node: &crate::ast::VariableDeclaration) {
+                self.variables += 1;
+                walk_variable_declaration(self, node);
             }
 
             fn visit_expression(&mut self, node: &crate::ast::Expression) {
@@ -1674,8 +1724,10 @@ mod tests {
         }
 
         let result = parse_text(
-            "class Visit {
+            "public class Visit {
                 Integer field = seed;
+                String label { get; private set; }
+                Visit(String label) { this.label = label; }
                 Integer run(Integer input) {
                     Integer local = input;
                     return local + field;
@@ -1686,13 +1738,27 @@ mod tests {
             types: 0,
             statements: 0,
             expressions: 0,
+            modifiers: 0,
+            fields: 0,
+            properties: 0,
+            accessors: 0,
+            methods: 0,
+            constructors: 0,
+            variables: 0,
             names: Vec::new(),
         };
         result.unit.unwrap().visit(&mut counter);
-        assert_eq!(counter.types, 4);
-        assert_eq!(counter.statements, 2);
-        assert_eq!(counter.expressions, 5);
-        assert_eq!(counter.names, ["seed", "input", "local", "field"]);
+        assert_eq!(counter.types, 6);
+        assert_eq!(counter.statements, 3);
+        assert_eq!(counter.expressions, 9);
+        assert_eq!(counter.modifiers, 2);
+        assert_eq!(counter.fields, 1);
+        assert_eq!(counter.properties, 1);
+        assert_eq!(counter.accessors, 2);
+        assert_eq!(counter.methods, 1);
+        assert_eq!(counter.constructors, 1);
+        assert_eq!(counter.variables, 1);
+        assert_eq!(counter.names, ["seed", "label", "input", "local", "field"]);
     }
 
     #[test]
@@ -1742,6 +1808,7 @@ mod tests {
                 "class C { @AuraEnabled Integer x; }",
                 "parse.unsupported-syntax",
             ),
+            ("class C { ; }", "parse.expected-member"),
             ("class C { Integer = 1; }", "parse.expected-identifier"),
             ("class C { Unknown x() ; }", "parse.unsupported-syntax"),
             (

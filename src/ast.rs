@@ -702,8 +702,30 @@ pub trait Visitor {
         walk_class_declaration(self, node);
     }
 
+    fn visit_modifier(&mut self, _node: &Modifier) {}
+
     fn visit_class_member(&mut self, node: &ClassMember) {
         walk_class_member(self, node);
+    }
+
+    fn visit_field_declaration(&mut self, node: &FieldDeclaration) {
+        walk_field_declaration(self, node);
+    }
+
+    fn visit_property_declaration(&mut self, node: &PropertyDeclaration) {
+        walk_property_declaration(self, node);
+    }
+
+    fn visit_property_accessor(&mut self, node: &PropertyAccessor) {
+        walk_property_accessor(self, node);
+    }
+
+    fn visit_method_declaration(&mut self, node: &MethodDeclaration) {
+        walk_method_declaration(self, node);
+    }
+
+    fn visit_constructor_declaration(&mut self, node: &ConstructorDeclaration) {
+        walk_constructor_declaration(self, node);
     }
 
     fn visit_type(&mut self, node: &Type) {
@@ -722,6 +744,10 @@ pub trait Visitor {
         walk_statement(self, node);
     }
 
+    fn visit_variable_declaration(&mut self, node: &VariableDeclaration) {
+        walk_variable_declaration(self, node);
+    }
+
     fn visit_expression(&mut self, node: &Expression) {
         walk_expression(self, node);
     }
@@ -734,6 +760,9 @@ pub fn walk_compilation_unit<V: Visitor + ?Sized>(visitor: &mut V, node: &Compil
 }
 
 pub fn walk_class_declaration<V: Visitor + ?Sized>(visitor: &mut V, node: &ClassDeclaration) {
+    for modifier in node.modifiers() {
+        visitor.visit_modifier(modifier);
+    }
     if let Some(extends) = node.extends() {
         visitor.visit_type(extends);
     }
@@ -747,27 +776,61 @@ pub fn walk_class_declaration<V: Visitor + ?Sized>(visitor: &mut V, node: &Class
 
 pub fn walk_class_member<V: Visitor + ?Sized>(visitor: &mut V, node: &ClassMember) {
     match node {
-        ClassMember::Field(field) => {
-            visitor.visit_type(field.ty());
-            if let Some(initializer) = field.initializer() {
-                visitor.visit_expression(initializer);
-            }
-        }
-        ClassMember::Property(property) => visitor.visit_type(property.ty()),
-        ClassMember::Method(method) => {
-            visitor.visit_type(method.return_type());
-            for parameter in method.parameters() {
-                visitor.visit_parameter(parameter);
-            }
-            visitor.visit_block(method.body());
-        }
-        ClassMember::Constructor(constructor) => {
-            for parameter in constructor.parameters() {
-                visitor.visit_parameter(parameter);
-            }
-            visitor.visit_block(constructor.body());
-        }
+        ClassMember::Field(field) => visitor.visit_field_declaration(field),
+        ClassMember::Property(property) => visitor.visit_property_declaration(property),
+        ClassMember::Method(method) => visitor.visit_method_declaration(method),
+        ClassMember::Constructor(constructor) => visitor.visit_constructor_declaration(constructor),
     }
+}
+
+pub fn walk_field_declaration<V: Visitor + ?Sized>(visitor: &mut V, node: &FieldDeclaration) {
+    for modifier in node.modifiers() {
+        visitor.visit_modifier(modifier);
+    }
+    visitor.visit_type(node.ty());
+    if let Some(initializer) = node.initializer() {
+        visitor.visit_expression(initializer);
+    }
+}
+
+pub fn walk_property_declaration<V: Visitor + ?Sized>(visitor: &mut V, node: &PropertyDeclaration) {
+    for modifier in node.modifiers() {
+        visitor.visit_modifier(modifier);
+    }
+    visitor.visit_type(node.ty());
+    for accessor in node.accessors() {
+        visitor.visit_property_accessor(accessor);
+    }
+}
+
+pub fn walk_property_accessor<V: Visitor + ?Sized>(visitor: &mut V, node: &PropertyAccessor) {
+    for modifier in node.modifiers() {
+        visitor.visit_modifier(modifier);
+    }
+}
+
+pub fn walk_method_declaration<V: Visitor + ?Sized>(visitor: &mut V, node: &MethodDeclaration) {
+    for modifier in node.modifiers() {
+        visitor.visit_modifier(modifier);
+    }
+    visitor.visit_type(node.return_type());
+    for parameter in node.parameters() {
+        visitor.visit_parameter(parameter);
+    }
+    visitor.visit_block(node.body());
+}
+
+pub fn walk_constructor_declaration<V: Visitor + ?Sized>(
+    visitor: &mut V,
+    node: &ConstructorDeclaration,
+) {
+    for modifier in node.modifiers() {
+        visitor.visit_modifier(modifier);
+    }
+    for parameter in node.parameters() {
+        visitor.visit_parameter(parameter);
+    }
+    visitor.visit_block(node.body());
 }
 
 pub fn walk_type<V: Visitor + ?Sized>(visitor: &mut V, node: &Type) {
@@ -789,12 +852,7 @@ pub fn walk_block<V: Visitor + ?Sized>(visitor: &mut V, node: &Block) {
 pub fn walk_statement<V: Visitor + ?Sized>(visitor: &mut V, node: &Statement) {
     match node.kind() {
         StatementKind::Block(block) => visitor.visit_block(block),
-        StatementKind::Variable(variable) => {
-            visitor.visit_type(variable.ty());
-            if let Some(initializer) = variable.initializer() {
-                visitor.visit_expression(initializer);
-            }
-        }
+        StatementKind::Variable(variable) => visitor.visit_variable_declaration(variable),
         StatementKind::Expression(expression) | StatementKind::Throw(expression) => {
             visitor.visit_expression(expression);
         }
@@ -826,10 +884,7 @@ pub fn walk_statement<V: Visitor + ?Sized>(visitor: &mut V, node: &Statement) {
             if let Some(initializer) = initializer {
                 match initializer {
                     ForInitializer::Variable(variable) => {
-                        visitor.visit_type(variable.ty());
-                        if let Some(initializer) = variable.initializer() {
-                            visitor.visit_expression(initializer);
-                        }
+                        visitor.visit_variable_declaration(variable);
                     }
                     ForInitializer::Expressions(expressions) => {
                         for expression in expressions {
@@ -851,7 +906,7 @@ pub fn walk_statement<V: Visitor + ?Sized>(visitor: &mut V, node: &Statement) {
             iterable,
             body,
         } => {
-            visitor.visit_type(variable.ty());
+            visitor.visit_variable_declaration(variable);
             visitor.visit_expression(iterable);
             visitor.visit_statement(body);
         }
@@ -861,6 +916,13 @@ pub fn walk_statement<V: Visitor + ?Sized>(visitor: &mut V, node: &Statement) {
             }
         }
         StatementKind::Break | StatementKind::Continue | StatementKind::Empty => {}
+    }
+}
+
+pub fn walk_variable_declaration<V: Visitor + ?Sized>(visitor: &mut V, node: &VariableDeclaration) {
+    visitor.visit_type(node.ty());
+    if let Some(initializer) = node.initializer() {
+        visitor.visit_expression(initializer);
     }
 }
 

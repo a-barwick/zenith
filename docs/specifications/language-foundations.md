@@ -2,9 +2,9 @@
 
 ## Status
 
-Source identity, lexical names, and diagnostics are **Implemented**. The active
-M2 parsed baseline is **Specified** in `syntax.md`; semantic language rules
-below are **Planned** unless marked otherwise.
+Source identity, lexical names, diagnostics, and the M2 parsed baseline are
+**Implemented**. Semantic language rules below are **Planned** unless marked
+otherwise.
 
 ## Source files
 
@@ -34,7 +34,7 @@ syntax.
 
 ## Baseline syntax
 
-M2 specifies a deliberately selected Apex-shaped parsed baseline:
+M2 implements a deliberately selected Apex-shaped parsed baseline:
 
 - classes, fields, properties, methods, and constructors
 - primitive and collection types

@@ -178,6 +178,22 @@ fn parses_broad_m2_fixture_with_stable_golden_output() {
 }
 
 #[test]
+fn parses_complete_m2_surface_with_stable_golden_output() {
+    let output = zenith()
+        .args(["ast"])
+        .arg(fixture("examples/parsed-baseline.zen"))
+        .output()
+        .expect("run zenith ast");
+
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        include_str!("golden/parsed-baseline.ast")
+    );
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
 fn reports_tokens_usage_errors_with_status_two() {
     for arguments in [vec!["tokens"], vec!["tokens", "one.zen", "two.zen"]] {
         let output = zenith().args(arguments).output().expect("run zenith");

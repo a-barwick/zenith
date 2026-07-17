@@ -2,10 +2,10 @@
 
 ## Current compiler front end
 
-M1 implements the complete source-to-token boundary:
+M2 implements the complete source-to-immutable-syntax boundary:
 
 ```text
-CLI help/version/tokens
+CLI help/version/tokens/ast
 
 SourceMap
   ├── SourceFile
@@ -15,6 +15,12 @@ SourceMap
           │
           ▼
 Lexer ───► tokens with exact spans, canonical names, and decoded strings
+          │
+          ▼
+Parser ──► immutable untyped syntax with source-spanned nodes
+          │
+          ├──► shared read-only visitor
+          └──► stable AST inspection renderer
 
 Diagnostic
   ├── stable code, severity, and owning phase
@@ -22,8 +28,9 @@ Diagnostic
   └── deterministic source rendering
 ```
 
-There is intentionally no placeholder parser, semantic checker, or emitter.
-Each module arrives with the milestone that owns executable behavior.
+There is intentionally no placeholder resolver, semantic checker, or emitter.
+The parser contains no name, type, schema, effect, lowering, or emission logic.
+Each later module arrives with the milestone that owns executable behavior.
 
 ## Product and runtime boundary
 
@@ -107,6 +114,14 @@ Its observable contract is `docs/specifications/lexical-structure.md`.
 The parser produces immutable syntax. It owns precedence, grammar recovery, and
 syntax diagnostics. It does not resolve names, infer nullability, count effects,
 or make emission choices.
+
+The M2 AST owns source-faithful names and complete file-aware node spans behind
+read-only accessors. A shared visitor walks declaration, type, statement, and
+expression children in source order. The parser may return a recovered partial
+tree alongside diagnostics for tooling, but later semantic phases do not run
+when parse errors exist. The observable grammar, recovery boundaries, stable
+diagnostic codes, and inspection format are defined in
+`docs/specifications/syntax.md`.
 
 ### Resolution and typing
 
@@ -230,6 +245,8 @@ and its trust boundary is recorded in
 | `diagnostic` | Stable diagnostics, labels, ordering, and console rendering |
 | `token` | Token, identifier, canonical-name, and stable inspection representation |
 | `lexer` | Recoverable source-to-token conversion |
+| `ast` | Immutable parsed declarations, types, statements, expressions, shared visitor, and stable rendering |
+| `parser` | Precedence, parsed-baseline grammar, localized recovery, and syntax diagnostics |
 | `lib` | Public compiler front-end façade |
 | `main` | CLI argument, source loading, and inspection behavior |
 
@@ -237,7 +254,6 @@ and its trust boundary is recorded in
 
 | Module | Responsibility |
 |---|---|
-| `ast` / `parser` | Immutable parsed syntax and grammar |
 | `resolve` | Cross-file names, scopes, imports, and symbol identities |
 | `hir` / `types` | Checked expressions, declarations, conversions, and types |
 | `schema` / `query` | Salesforce metadata normalization and query shapes |

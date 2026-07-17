@@ -2,8 +2,8 @@
 
 ## Status
 
-**Specified for active M2.** This document is the observable contract for
-Zenith's token-to-immutable-AST boundary. Parser acceptance does not imply name
+**Implemented in M2.** This document is the observable contract for Zenith's
+token-to-immutable-AST boundary. Parser acceptance does not imply name
 resolution, type checking, lowering, Apex emission, or runtime compatibility.
 
 ## Compilation units and declarations
@@ -107,8 +107,9 @@ M2 records source syntax and precedence without selecting calls, members, or
 types. From tightest to loosest, the supported expression forms are:
 
 1. primary expressions: identifiers, the Apex `System` namespace word,
-   integers, strings, `true`, `false`, `null`, `this`, `super`,
-   parenthesized expressions, and `new type(arguments)`
+   type-shaped keyword roots used by static member calls, integers, strings,
+   `true`, `false`, `null`, `this`, `super`, parenthesized expressions, and
+   `new type(arguments)`
 2. postfix calls, member access, safe member access reservation, indexing,
    postfix `++`, and postfix `--`
 3. prefix `!`, `~`, `+`, `-`, `++`, and `--`
@@ -136,10 +137,12 @@ emission choice is stored in the AST. Every node carries one file-aware span
 covering its complete source construct, while identifiers retain their exact
 spelling, canonical key, and identifier span.
 
-The shared visitor walks all declaration, type, statement, and expression
-children in deterministic source order. The visitor API receives shared
-references only. Consumers that need semantic facts build a separate
-representation or side table rather than mutating syntax.
+The shared visitor exposes hooks for compilation units, classes, every concrete
+member and accessor declaration, modifiers, parameters, types, blocks,
+statements, local declarations, and expressions. It walks their children in
+deterministic source order and receives shared references only. Consumers that
+need semantic facts build a separate representation or side table rather than
+mutating syntax.
 
 ## Recovery and diagnostics
 
@@ -201,3 +204,7 @@ usage errors exit with status 2.
 
 Both fixtures have stable AST goldens. Negative parser fixtures cover
 declaration, member, type, delimiter, expression, and statement recovery.
+`examples/parsed-baseline.zen` adds a stable whole-surface golden covering
+inheritance, constructors, fields, nested nullable types, every loop family,
+postfix/unary/conditional expressions, indexing, safe member reservation,
+`new`, `throw`, and additional control-flow nodes.

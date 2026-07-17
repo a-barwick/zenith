@@ -50,7 +50,7 @@ Unicode source positions, invalid characters, and unterminated constructs.
 
 ## M2 — Parsed syntax and immutable AST
 
-**Status:** Active
+**Status:** Complete
 
 ### Scope
 

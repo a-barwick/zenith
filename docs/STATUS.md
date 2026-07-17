@@ -4,7 +4,8 @@
 
 ## Active milestone
 
-M2 — Parsed syntax and immutable AST
+None. M2 — Parsed syntax and immutable AST is complete. M3 remains Planned
+until its acceptance fixture and checking/emission specifications are explicit.
 
 ## Completed
 
@@ -44,18 +45,41 @@ M2 — Parsed syntax and immutable AST
   explicit status 1 source/compiler failures, and status 2 usage failures
 - Executable coverage of the complete keyword, contextual-word, punctuation,
   operator, escape, comment, recovery, source-position, and CLI contracts
+- M2 parsed-syntax specification covering declarations, types, statements,
+  expressions, precedence, immutable syntax, recovery, diagnostics, and CLI
+- Immutable source-spanned AST for classes, fields, properties, accessors,
+  methods, constructors, parameters, nested/nullable type syntax, statements,
+  and expressions
+- Shared read-only AST visitor with deterministic source-order traversal and no
+  semantic facts stored in parsed syntax
+- Parser support for blocks, variables, assignments, calls, member/index
+  access, conditionals, traditional/enhanced loops, returns, throws, and the
+  specified unary/binary/postfix expression precedence
+- Generic-close handling for nested types despite maximal-munch `>>` and `>>>`
+  lexer tokens
+- Localized declaration, member, and statement recovery with stable parse
+  diagnostics and recoverable partial trees
+- `zenith ast <file.zen>` with deterministic goldens for both M2 acceptance
+  fixtures, lexical/parse gating, and explicit status 1/2 behavior
+- 54 passing Rust tests spanning source, diagnostics, lexing, parser shape and
+  purity, visitor traversal, recovery, CLI diagnostics, and five inspection
+  goldens, including the complete `examples/parsed-baseline.zen` surface
+- Instrumented `cargo llvm-cov --all-targets` coverage of 88.70% lines overall,
+  including 87.03% for the parser, 82.09% for the AST/renderer, 98.92% for the
+  CLI, and 98.88% for the lexer
 
 ## Immediate target
 
-Specify M2's parsed baseline and recovery contract, then implement immutable
-AST and parser modules plus `zenith ast <file.zen>` for
-`examples/lexical-baseline.zen`. Keep resolution, typing, effects, lowering,
-and emission out of the parser.
+Specify M3's multi-file acceptance fixture, project/configuration contract,
+checked baseline, Apex IR and emission format, source maps, handwritten-Apex
+boundary summaries, and backend-neutral verification outcomes before
+activating M3.
 
 ## Known limitations
 
-- Zenith source is tokenized but not parsed, resolved, checked, lowered, or
-  emitted. Token recognition does not imply parser acceptance.
+- Zenith source is tokenized and the selected M2 grammar is parsed, but it is
+  not resolved, checked, lowered, or emitted. Parser acceptance is Local syntax
+  support and does not imply Apex compatibility.
 - `check`, `build`, `emit`, `test`, and `verify` are documented targets but are
   intentionally unavailable.
 - `SourceMap::add` assigns a new session-local ID per loaded entry. Stable

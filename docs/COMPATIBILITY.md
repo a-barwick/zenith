@@ -54,7 +54,8 @@ error.
 | Source identities | Local | None | Stable within one compiler session |
 | File-aware byte spans | Local | None | UTF-8-safe slicing and Unicode-scalar line/column views |
 | Phase-owned diagnostics | Local | None | Source, language, schema, verification, and project phases represented |
-| `.zen` compilation | Planned | TBD | Token inspection is implemented; parsing begins in M2 |
+| `.zen` parsing | Local | None | Selected M2 grammar produces immutable source-spanned syntax |
+| `.zen` compilation | Planned | TBD | Parsing is implemented; checking and emission begin in M3 |
 
 ## Lexical surface
 
@@ -68,16 +69,27 @@ error.
 | `tokens <file.zen>` inspection | Local | Stable goldens and explicit diagnostic/usage exit behavior |
 | Rendered lexical diagnostics | Local | Stable codes, labels, recovery, ordering, and Unicode-scalar locations |
 
+## Parsed syntax surface
+
+| Feature | Status | Notes |
+|---|---|---|
+| Apex-shaped class declarations | Local | Classes, inheritance clauses, fields, properties, methods, constructors, parameters, and selected modifiers |
+| Parsed type syntax | Local | Source-faithful type names, nested generic arguments, and reserved nullable suffix |
+| Statements and expressions | Local | Blocks, declarations, assignment, calls, member/index access, control flow, loops, precedence, and selected literals/operators |
+| Immutable AST and visitor | Local | Read-only accessors, complete file-aware spans, and deterministic source-order traversal |
+| Syntax recovery | Local | Partial trees plus stable declaration/member/statement diagnostics; semantic phases remain gated |
+| `ast <file.zen>` inspection | Local | Stable goldens for both M2 acceptance fixtures and status 1/2 CLI behavior |
+
 ## Language surface
 
 | Feature | Parse | Check | Emit | Status | Lowering | Target |
 |---|---:|---:|---:|---|---|---|
-| Apex-shaped classes and methods | No | No | No | Planned | TBD | M2–M3 |
-| Primitive expressions/control flow | No | No | No | Planned | TBD | M2–M3 |
-| Collections and ordinary calls | No | No | No | Planned | TBD | M2–M3 |
+| Apex-shaped classes and methods | Yes | No | No | Local | None | M2–M3 |
+| Primitive expressions/control flow | Yes | No | No | Local | None | M2–M3 |
+| Collections and ordinary calls | Yes | No | No | Local | None | M2–M3 |
 | Case-insensitive resolution | No | No | No | Planned | None | M1–M3 |
 | Handwritten Apex boundary declarations | No | No | No | Planned | None | M3 |
-| Non-null and nullable types | No | No | No | Planned | TBD | M4 |
+| Non-null and nullable types | Yes | No | No | Local | None | M2/M4 |
 | Immutable `let` | No | No | No | Planned | TBD | M4 |
 | Records/value types | No | No | No | Planned | TBD | M4 |
 | Typed `Id<T>` | No | No | No | Planned | TBD | M4 |

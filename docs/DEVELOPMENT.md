@@ -19,14 +19,20 @@ cargo run -- --help
 cargo run -- --version
 ```
 
-The smallest source fixture is `examples/hello.zen`; the broader M1/M2 token
-baseline is `examples/lexical-baseline.zen`. Inspect either through the shipped
-M1 command:
+The smallest source fixture is `examples/hello.zen`; the broader M1/M2 baseline
+is `examples/lexical-baseline.zen`. Inspect either through the shipped token and
+AST commands:
 
 ```bash
 cargo run -- tokens examples/hello.zen
 cargo run -- tokens examples/lexical-baseline.zen
+cargo run -- ast examples/hello.zen
+cargo run -- ast examples/lexical-baseline.zen
+cargo run -- ast examples/parsed-baseline.zen
 ```
+
+`examples/parsed-baseline.zen` is the broad executable parser/renderer fixture
+covering the complete M2 surface beyond the required lexical baseline.
 
 Do not document a CLI command as current behavior before an executable test
 passes.
