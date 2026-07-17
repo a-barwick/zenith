@@ -5,6 +5,7 @@ implementation but do not replace executable evidence.
 
 - [Language foundations](language-foundations.md)
 - [Lexical structure](lexical-structure.md)
+- [Parsed syntax](syntax.md)
 - [Diagnostics](diagnostics.md)
 - [Governor effects](governor-effects.md)
 - [Testing and test generation](testing-and-test-generation.md)
