@@ -1,0 +1,34 @@
+public class SafeValueService {
+    public static LookupResult found(
+        Id<Account> requested,
+        OwnerContact? owner
+    ) {
+        let summary = new AccountSummary(requested, owner);
+        return LookupResult.Found(summary);
+    }
+
+    public static String describe(
+        Id<Account> requested,
+        LookupResult result
+    ) {
+        match (result) {
+            when Found(summary) {
+                if (summary.accountId != requested) {
+                    return 'mismatched account';
+                }
+                let email = summary.owner?.email ?? 'unassigned';
+                return email;
+            }
+            when Missing(reason) {
+                return reason;
+            }
+        }
+    }
+
+    public static String narrowed(OwnerContact? owner) {
+        if (owner == null) {
+            return 'none';
+        }
+        return owner.email;
+    }
+}

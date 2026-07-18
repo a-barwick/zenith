@@ -1,0 +1,4 @@
+public sealed result LookupResult {
+    case Found(AccountSummary summary);
+    case Missing(String reason);
+}

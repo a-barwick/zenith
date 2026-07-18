@@ -172,12 +172,12 @@ fn complete_checked_surface_lowers_and_emits_readable_apex() {
         "Surface.zen",
         r#"
 public class Surface {
-    private Long longValue;
-    private Decimal decimalValue;
-    private Double doubleValue;
-    private Object objectValue;
-    private String backingText;
-    public String State { get; private set; }
+    private Long? longValue;
+    private Decimal? decimalValue;
+    private Double? doubleValue;
+    private Object? objectValue;
+    private String backingText = '';
+    public String? State { get; private set; }
 
     public static Integer exercise(
         List<Integer> values,
@@ -187,7 +187,7 @@ public class Surface {
         Integer threshold
     ) {
         Integer total = 0;
-        Integer spare;
+        Integer spare = 0;
         String mode = enabled ? 'enabled' : 'disabled';
         Boolean contained = labels.contains(mode);
         Boolean inserted = labels.add(mode);
@@ -217,7 +217,7 @@ public class Surface {
             total += nested;
         }
         ;
-        Integer selected = totals.get(mode);
+        Integer selected = totals.get(mode) ?? 0;
         Boolean empty = totals.isEmpty() || labels.isEmpty();
         return totals.containsKey(mode) || contained || inserted || empty
             ? selected
@@ -365,7 +365,7 @@ fn semantic_failures_are_explicit_and_never_emit_partial_apex() {
         (
             "Main.zen",
             "public class Main { public static Main make() { return new Main(); } }",
-            "type.unsupported-syntax",
+            "type.not-constructible",
         ),
         (
             "Main.zen",

@@ -138,12 +138,13 @@ const CONTEXTUAL_WORDS: &[&str] = &[
     "inherited",
     "last",
     "order",
+    "result",
     "sharing",
     "with",
     "without",
 ];
 
-const ZENITH_WORDS: &[&str] = &["effects", "fn", "let", "query", "record"];
+const ZENITH_WORDS: &[&str] = &["effects", "fn", "let", "match", "query", "record", "sealed"];
 
 const OPERATORS: &[&str] = &[
     ">>>=", "===", "!==", "<<=", ">>=", ">>>", "++", "+=", "--", "-=", "*=", "/=", "&&", "||",

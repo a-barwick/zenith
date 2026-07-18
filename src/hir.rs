@@ -4,6 +4,7 @@ use crate::types::Type;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Program {
     pub classes: Vec<Class>,
+    pub source_paths: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -12,6 +13,21 @@ pub struct Class {
     pub modifiers: Vec<String>,
     pub members: Vec<Member>,
     pub source_path: String,
+    pub span: Span,
+    pub kind: ClassKind,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ClassKind {
+    Class,
+    Record { components: Vec<Parameter> },
+    SealedResult { variants: Vec<ResultVariant> },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResultVariant {
+    pub name: String,
+    pub payloads: Vec<Parameter>,
     pub span: Span,
 }
 
@@ -83,6 +99,7 @@ pub enum StatementKind {
         ty: Type,
         name: String,
         initializer: Option<Expression>,
+        immutable: bool,
     },
     Expression(Expression),
     If {
@@ -106,10 +123,24 @@ pub enum StatementKind {
         iterable: Expression,
         body: Box<Statement>,
     },
+    Match {
+        subject: Expression,
+        result_name: String,
+        arms: Vec<MatchArm>,
+    },
     Return(Option<Expression>),
     Break,
     Continue,
     Empty,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MatchArm {
+    pub variant_name: String,
+    pub variant_index: usize,
+    pub bindings: Vec<Parameter>,
+    pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -142,16 +173,22 @@ pub enum ExpressionKind {
     Null,
     This,
     Parenthesized(Box<Expression>),
+    New {
+        name: String,
+        arguments: Vec<Expression>,
+    },
     Call {
         receiver: Option<Box<Expression>>,
         name: String,
         arguments: Vec<Expression>,
         target: CallTarget,
+        safe: bool,
     },
     Member {
         object: Box<Expression>,
         name: String,
         target: ValueTarget,
+        safe: bool,
     },
     Index {
         object: Box<Expression>,

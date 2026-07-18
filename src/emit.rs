@@ -34,10 +34,9 @@ pub fn emit(
     apex_package_path: Option<&str>,
 ) -> Vec<Artifact> {
     let mut artifacts = Vec::new();
-    let mut sources = BTreeSet::new();
+    let sources: BTreeSet<_> = program.source_paths.iter().cloned().collect();
     let mut class_records = Vec::new();
     for class in &program.classes {
-        sources.insert(class.source_path.clone());
         let mut writer = ApexWriter::new();
         writer.class(class);
         let class_path = format!("generated/main/default/classes/{}.cls", class.name);
@@ -149,6 +148,18 @@ struct ApexWriter {
     indent: usize,
 }
 
+fn generated_member_visibility(class: &apex_ir::Class) -> &'static str {
+    if class
+        .modifiers
+        .iter()
+        .any(|modifier| modifier.eq_ignore_ascii_case("global"))
+    {
+        "global"
+    } else {
+        "public"
+    }
+}
+
 impl ApexWriter {
     fn new() -> Self {
         Self {
@@ -159,6 +170,16 @@ impl ApexWriter {
     }
 
     fn class(&mut self, class: &apex_ir::Class) {
+        match &class.kind {
+            apex_ir::ClassKind::Class => self.ordinary_class(class),
+            apex_ir::ClassKind::Record { components } => self.record_class(class, components),
+            apex_ir::ClassKind::SealedResult { variants } => {
+                self.result_class(class, variants);
+            }
+        }
+    }
+
+    fn ordinary_class(&mut self, class: &apex_ir::Class) {
         self.indentation();
         self.modifiers(&class.modifiers);
         self.output.push_str("class ");
@@ -175,12 +196,143 @@ impl ApexWriter {
         self.output.push_str("}\n");
     }
 
+    fn record_class(&mut self, class: &apex_ir::Class, components: &[apex_ir::Parameter]) {
+        let visibility = generated_member_visibility(class);
+        self.indentation();
+        self.modifiers(&class.modifiers);
+        self.output.push_str("class ");
+        self.mapped(&class.name, class.origin);
+        self.output.push_str(" {\n");
+        self.indent += 1;
+        for component in components {
+            self.indentation();
+            self.output.push_str(visibility);
+            self.output.push_str(" final ");
+            self.output.push_str(&component.ty.apex_name());
+            self.output.push(' ');
+            self.mapped(&component.name, component.origin);
+            self.output.push_str(";\n");
+        }
+        if !components.is_empty() {
+            self.output.push('\n');
+        }
+        self.indentation();
+        self.output.push_str(visibility);
+        self.output.push(' ');
+        self.mapped(&class.name, class.origin);
+        self.output.push('(');
+        self.parameters(components);
+        self.output.push_str(") {\n");
+        self.indent += 1;
+        for component in components {
+            self.indentation();
+            self.output.push_str("this.");
+            self.mapped(&component.name, component.origin);
+            self.output.push_str(" = ");
+            self.mapped(&component.name, component.origin);
+            self.output.push_str(";\n");
+        }
+        self.indent -= 1;
+        self.indentation();
+        self.output.push_str("}\n");
+        self.indent -= 1;
+        self.output.push_str("}\n");
+    }
+
+    fn result_class(&mut self, class: &apex_ir::Class, variants: &[apex_ir::ResultVariant]) {
+        let visibility = generated_member_visibility(class);
+        self.indentation();
+        self.modifiers(&class.modifiers);
+        self.output.push_str("class ");
+        self.mapped(&class.name, class.origin);
+        self.output.push_str(" {\n");
+        self.indent += 1;
+        self.indentation();
+        self.output.push_str(visibility);
+        self.output.push_str(" Integer ");
+        self.mapped("ZenithGenerated_tag", class.origin);
+        self.output.push_str(" { get; private set; }\n");
+        for (variant_index, variant) in variants.iter().enumerate() {
+            for (payload_index, payload) in variant.payloads.iter().enumerate() {
+                self.indentation();
+                self.output.push_str(visibility);
+                self.output.push(' ');
+                self.output.push_str(&payload.ty.apex_name());
+                self.output.push(' ');
+                self.mapped(
+                    &format!("ZenithGenerated_v{variant_index}_p{payload_index}"),
+                    payload.origin,
+                );
+                self.output.push_str(" { get; private set; }\n");
+            }
+        }
+        self.output.push('\n');
+        self.indentation();
+        self.output.push_str("private ");
+        self.mapped(&class.name, class.origin);
+        self.output.push_str("() {}\n");
+        for (variant_index, variant) in variants.iter().enumerate() {
+            self.output.push('\n');
+            self.indentation();
+            self.output.push_str(visibility);
+            self.output.push_str(" static ");
+            self.output.push_str(&class.name);
+            self.output.push(' ');
+            self.mapped(&variant.name, variant.origin);
+            self.output.push('(');
+            self.parameters(&variant.payloads);
+            self.output.push_str(") {\n");
+            self.indent += 1;
+            self.indentation();
+            self.output.push_str(&class.name);
+            self.output.push_str(" ZenithGenerated_result = new ");
+            self.output.push_str(&class.name);
+            self.output.push_str("();\n");
+            self.indentation();
+            self.output.push_str("ZenithGenerated_result.");
+            self.mapped("ZenithGenerated_tag", variant.origin);
+            self.output.push_str(" = ");
+            self.mapped(&variant_index.to_string(), variant.origin);
+            self.output.push_str(";\n");
+            for (payload_index, payload) in variant.payloads.iter().enumerate() {
+                self.indentation();
+                self.output.push_str("ZenithGenerated_result.");
+                self.mapped(
+                    &format!("ZenithGenerated_v{variant_index}_p{payload_index}"),
+                    payload.origin,
+                );
+                self.output.push_str(" = ");
+                self.mapped(&payload.name, payload.origin);
+                self.output.push_str(";\n");
+            }
+            self.indentation();
+            self.output.push_str("return ZenithGenerated_result;\n");
+            self.indent -= 1;
+            self.indentation();
+            self.output.push_str("}\n");
+        }
+        self.indent -= 1;
+        self.output.push_str("}\n");
+    }
+
+    fn parameters(&mut self, parameters: &[apex_ir::Parameter]) {
+        for (index, parameter) in parameters.iter().enumerate() {
+            if index > 0 {
+                self.output.push_str(", ");
+            }
+            self.output.push_str(&parameter.ty.apex_name());
+            self.output.push(' ');
+            self.mapped(&parameter.name, parameter.origin);
+        }
+    }
+
     fn member(&mut self, member: &apex_ir::Member) {
         match member {
             apex_ir::Member::Field(field) => {
                 self.indentation();
                 self.modifiers(&field.modifiers);
-                write!(self.output, "{} ", field.ty).expect("writing to String cannot fail");
+                write!(self.output, "{} ", field.ty.apex_name())
+                    .expect("writing to String cannot fail");
                 self.mapped(&field.name, field.origin);
                 if let Some(initializer) = &field.initializer {
                     self.output.push_str(" = ");
@@ -191,7 +343,8 @@ impl ApexWriter {
             apex_ir::Member::Property(property) => {
                 self.indentation();
                 self.modifiers(&property.modifiers);
-                write!(self.output, "{} ", property.ty).expect("writing to String cannot fail");
+                write!(self.output, "{} ", property.ty.apex_name())
+                    .expect("writing to String cannot fail");
                 self.mapped(&property.name, property.origin);
                 self.output.push_str(" {\n");
                 self.indent += 1;
@@ -208,7 +361,7 @@ impl ApexWriter {
             apex_ir::Member::Method(method) => {
                 self.indentation();
                 self.modifiers(&method.modifiers);
-                write!(self.output, "{} ", method.return_type)
+                write!(self.output, "{} ", method.return_type.apex_name())
                     .expect("writing to String cannot fail");
                 self.mapped(&method.name, method.origin);
                 self.output.push('(');
@@ -216,7 +369,7 @@ impl ApexWriter {
                     if index > 0 {
                         self.output.push_str(", ");
                     }
-                    write!(self.output, "{} ", parameter.ty)
+                    write!(self.output, "{} ", parameter.ty.apex_name())
                         .expect("writing to String cannot fail");
                     self.mapped(&parameter.name, parameter.origin);
                 }
@@ -252,7 +405,7 @@ impl ApexWriter {
                 initializer,
             } => {
                 self.indentation();
-                write!(self.output, "{ty} ").expect("writing to String cannot fail");
+                write!(self.output, "{} ", ty.apex_name()).expect("writing to String cannot fail");
                 self.mapped(name, statement.origin);
                 if let Some(initializer) = initializer {
                     self.output.push_str(" = ");
@@ -315,7 +468,8 @@ impl ApexWriter {
                 body,
             } => {
                 self.indentation();
-                write!(self.output, "for ({ty} ").expect("writing to String cannot fail");
+                write!(self.output, "for ({} ", ty.apex_name())
+                    .expect("writing to String cannot fail");
                 self.mapped(name, statement.origin);
                 self.output.push_str(" : ");
                 self.expression(iterable);
@@ -369,7 +523,7 @@ impl ApexWriter {
                 name,
                 initializer,
             } => {
-                write!(self.output, "{ty} ").expect("writing to String cannot fail");
+                write!(self.output, "{} ", ty.apex_name()).expect("writing to String cannot fail");
                 self.mapped(name, origin);
                 if let Some(initializer) = initializer {
                     self.output.push_str(" = ");
@@ -407,23 +561,31 @@ impl ApexWriter {
                 self.expression(inner);
                 self.output.push(')');
             }
+            Kind::New { name, arguments } => {
+                self.output.push_str("new ");
+                self.mapped(name, expression.origin);
+                self.output.push('(');
+                self.expression_list(arguments);
+                self.output.push(')');
+            }
             Kind::Call {
                 receiver,
                 name,
                 arguments,
+                safe,
             } => {
                 if let Some(receiver) = receiver {
                     self.expression(receiver);
-                    self.output.push('.');
+                    self.output.push_str(if *safe { "?." } else { "." });
                 }
                 self.mapped(name, expression.origin);
                 self.output.push('(');
                 self.expression_list(arguments);
                 self.output.push(')');
             }
-            Kind::Member { object, name } => {
+            Kind::Member { object, name, safe } => {
                 self.expression(object);
-                self.output.push('.');
+                self.output.push_str(if *safe { "?." } else { "." });
                 self.mapped(name, expression.origin);
             }
             Kind::Index { object, index } => {
