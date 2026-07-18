@@ -1,109 +1,55 @@
 # Zenith
 
-A safe, bulk-first language that compiles to readable Salesforce Apex,
-implemented in Rust.
+**Salesforce code, held to a safer course.**
 
-Zenith is designed around the mistakes Apex developers most need help
-preventing: nullable values, unqueried fields, mixed SObject IDs, unsafe
-privilege transitions, partial DML handling, and code paths that can exceed
-governor limits. It keeps the Salesforce deployment model rather than
-introducing a separate production runtime.
+Zenith is a bulk-first language that compiles to readable, deployable Apex. Its
+Rust compiler is designed to catch null, query-shape, ID, security, and
+governor-limit mistakes before deployment. Salesforce remains the production
+runtime. No separate VM.
 
-The repository has completed its parsed-syntax milestone. It now tokenizes and
-parses the selected Apex-shaped baseline into immutable, source-spanned syntax
-with a shared visitor, localized recovery, and deterministic CLI output.
-Resolution, type checking, and Apex emission are not implemented yet.
+## Current Position
 
-```console
-$ cargo run -- --version
-zenith 0.1.0
+The lexer and parser are complete. Zenith accepts the selected Apex-shaped
+baseline and produces immutable, source-spanned syntax with deterministic
+diagnostics.
 
-$ cargo run -- tokens examples/hello.zen
-1:1..1:7	keyword(public)	"public"
-1:8..1:13	keyword(class)	"class"
-1:14..1:25	identifier(hellozenith)	"HelloZenith"
+The next checkpoint adds cross-file checking and deterministic Apex emission.
+`check`, `build`, and `emit` remain under active development.
 
-$ cargo run -- ast examples/hello.zen
-compilation-unit @1:1..6:1
-  class HelloZenith modifiers=[public] @1:1..5:2
-    method run modifiers=[public, static] @2:5..4:6
-```
+## First Run
 
-The intended workflow is:
+Zenith requires Rust 1.88 or newer.
 
 ```bash
-zenith check
-zenith build
-zenith emit
-zenith test
-zenith verify --target-org staging
+cargo build
+cargo test
+cargo run -- tokens examples/hello.zen
+cargo run -- ast examples/hello.zen
 ```
 
-Those compiler commands are roadmap targets, not current functionality.
-
-## Language direction
-
-A future Zenith method may look like:
-
-```zenith
-record AccountSummary(Id<Account> id, String name);
-
-fn loadAccounts(Set<Id<Account>> ids)
-    -> List<AccountSummary>
-    effects { soql <= 1 }
-{
-    return query Account { Id, Name where Id in :ids }
-        .map(account => AccountSummary(account.Id, account.Name));
-}
-```
-
-The compiler should understand which fields a query selected, which values can
-be null, which SObject type an ID belongs to, and how SOQL/DML effects compose
-through the call graph. It should lower those guarantees into deterministic,
-human-readable Apex.
-
-## Testing direction
-
-Zenith is intended to automate a large part of Apex test creation. Typed
-control flow, schema constraints, explicit contracts, examples, and local
-coverage can drive deterministic fixture and input generation. Cases with a
-trustworthy oracle can become managed generated tests; ambiguous cases become
-editable drafts rather than assertion-free coverage theater.
-
-Local execution runs the generated Apex through a compatible backend such as
-Apex Exec and maps failures and coverage back to Zenith. Apex Exec is optional,
-does not define Zenith semantics, and is not a production dependency.
-
-## Architecture at a glance
+## System Map
 
 ```text
-Zenith source + Salesforce metadata + handwritten-Apex API summaries
-  → tokens
-  → immutable syntax
-  → name resolution and typed HIR
-  → schema and governor-effect analysis
-  → lowered Apex IR
-  → generated SFDX source + source maps
-  → optional Apex Exec verification of generated Apex
-  → final Salesforce verification
+Zenith source + Salesforce metadata + Apex API summaries
+  → lex and parse
+  → resolve and type-check
+  → check schema, security, and governor effects
+  → lower to Apex IR
+  → emit SFDX source and source maps
+  → verify generated Apex
 ```
 
-The compiler phases stay independently testable. Generated Apex is a product
-surface, not a disposable implementation detail. User-facing local tests do
-not bypass lowering by executing Zenith HIR directly.
+Each phase owns one boundary. Unsupported behavior must fail explicitly.
+Generated Apex is inspectable product output, not a hidden runtime detail.
 
-## Project documentation
+## Bearings
 
-- [Vision](docs/VISION.md) — product north star and non-goals
-- [Roadmap](ROADMAP.md) — milestones and executable exit criteria
-- [Current status](docs/STATUS.md) — immediate implementation handoff
-- [Architecture](docs/ARCHITECTURE.md) — current and target compiler design
-- [Compatibility](docs/COMPATIBILITY.md) — shipped language and lowering claims
-- [Development](docs/DEVELOPMENT.md) — human and agentic working loop
-- [Apex Exec relationship](docs/APEX_EXEC.md) — comparison and verification
-  boundary
-- [Decisions](docs/decisions/README.md) — durable architectural rationale
-- [Specifications](docs/specifications/README.md) — intended language behavior
+- [Vision](docs/VISION.md) — purpose and operating principles
+- [Roadmap](ROADMAP.md) — milestones and exit criteria
+- [Current status](docs/STATUS.md) — shipped work and the active checkpoint
+- [Compatibility](docs/COMPATIBILITY.md) — supported language surface
+- [Development](docs/DEVELOPMENT.md) — build, test, and contribution workflow
+- [Architecture](docs/ARCHITECTURE.md) — compiler and runtime boundaries
 
-Zenith is an independent developer tool and is not affiliated with or endorsed
-by Salesforce.
+Zenith is independent software. It is not affiliated with or endorsed by
+Salesforce.
