@@ -15,10 +15,11 @@ syntax.
 | Unsupported | Recognized or requested but rejected explicitly |
 | Planned | Not implemented |
 
-No feature is currently **Verified** against Salesforce. M3's emitted-Apex
-surface remains **Local**: its deterministic compiler behavior is executable,
-and its generated acceptance project passes a pinned local Apex compiler smoke,
-but that evidence is not a Salesforce compatibility result.
+No feature is currently **Verified** against Salesforce. The emitted-Apex
+surface through M4 remains **Local**: deterministic compiler behavior is
+executable, and the M3 generated acceptance project passes a pinned local Apex
+compiler smoke. M4-only output is capability-gated as unsupported by that M3
+profile and has no local-backend or Salesforce compatibility claim.
 
 ## Verification outcomes
 
@@ -51,14 +52,14 @@ error.
 
 | Feature | Status | Lowering | Notes |
 |---|---|---|---|
-| `zenith --help` | Local | None | Documents inspection and M3 project commands |
+| `zenith --help` | Local | None | Documents inspection and project compilation commands |
 | `zenith --version` | Local | None | Prints the crate version |
 | Local and CI verification | Local | None | Rust 1.88.0 fmt/test/Clippy gates plus current-stable tests |
 | Source identities | Local | None | Stable within one compiler session |
 | File-aware byte spans | Local | None | UTF-8-safe slicing and Unicode-scalar line/column views |
 | Phase-owned diagnostics | Local | None | Source, language, schema, verification, and project phases represented |
 | `.zen` parsing | Local | None | Selected M2 grammar produces immutable source-spanned syntax |
-| `.zen` compilation | Local | Native | M3 project checking lowers the selected typed baseline through HIR and Apex IR |
+| `.zen` compilation | Local | Native | Project checking through M4 lowers the selected language through HIR and Apex IR |
 | `check`, `build`, and `emit` | Local | None | Deterministic project commands with distinct compiler and usage failures |
 
 ## Lexical surface
@@ -83,6 +84,7 @@ error.
 | Immutable AST and visitor | Local | Read-only accessors, complete file-aware spans, and deterministic source-order traversal |
 | Syntax recovery | Local | Partial trees plus stable declaration/member/statement diagnostics, bounded generic-closer recovery, and panic-safe rejection of incomplete token streams; semantic phases remain gated |
 | `ast <file.zen>` inspection | Local | Stable goldens for both M2 acceptance fixtures and status 1/2 CLI behavior |
+| M4 domain/value syntax | Local | Records, sealed results, SObject tags, `let`, and statement `match` produce immutable source-spanned AST nodes |
 
 ## Language surface
 
@@ -93,11 +95,12 @@ error.
 | `List`/`Set`/`Map` types and selected members | Yes | Yes | Yes | Local | Native | M3 |
 | Case-insensitive cross-file resolution | Yes | Yes | Yes | Local | None | M3 |
 | Handwritten Apex boundary declarations | Yes | Yes | No | Local | None | M3 |
-| Nullable suffixes and flow-sensitive null safety | Yes | No | No | Unsupported | None | M4 |
-| Immutable `let` | No | No | No | Planned | TBD | M4 |
-| Records/value types | No | No | No | Planned | TBD | M4 |
-| Typed `Id<T>` | No | No | No | Planned | TBD | M4 |
-| Sealed results/pattern matching | No | No | No | Planned | TBD | M4 |
+| Nullable suffixes, safe navigation/coalescing, and local flow narrowing | Yes | Yes | Yes | Local | Native | M4 |
+| Immutable `let` | Yes | Yes | Yes | Local | Desugared | M4 |
+| Records/value types | Yes | Yes | Yes | Local | Generated | M4 |
+| Explicit SObject domain tags | Yes | Yes | No | Local | None | M4 |
+| Typed `Id<T>` | Yes | Yes | Yes | Local | Desugared | M4 |
+| Sealed results and exhaustive statement matching | Yes | Yes | Yes | Local | Generated | M4 |
 | Query projection shapes | No | No | No | Planned | TBD | M5 |
 | Schema-aware relationship types | No | No | No | Planned | TBD | M5 |
 | Governor effects/contracts | No | No | No | Planned | None | M6 |
@@ -124,6 +127,8 @@ Proposed examples in the vision and specifications do not change these rows.
 | Pinned Apex Exec compile smoke evidence | Local | M3 |
 | Backend-neutral verification outcomes and evidence | Local | M3 |
 | Apex Exec generated-Apex compile checking | Local | M3 |
+| M4 capability preflight for the pinned M3 Apex Exec profile | Local | M4 |
+| M4 generated-Apex compile checking | Unsupported | M4 |
 | Structured Apex Exec checking/testing adapter | Planned | M10 |
 | SFDX `.trigger` and `.trigger-meta.xml` layout | Planned | M9 |
 | Versioned Apex Exec capability protocol | Planned | M10 |

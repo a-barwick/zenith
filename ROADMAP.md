@@ -104,7 +104,7 @@ This is the first deployable-language checkpoint.
 
 ## M4 — Safe values and domain types
 
-**Status:** Active
+**Status:** Complete
 
 ### Scope
 

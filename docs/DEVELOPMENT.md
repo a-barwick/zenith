@@ -47,6 +47,18 @@ cargo run -- build examples/m3-service
 `build` writes the SFDX-compatible tree beneath the configured `.zenith`
 directory.
 
+The complete M4 project fixture is `examples/m4-safe-values`:
+
+```bash
+cargo run -- check examples/m4-safe-values
+cargo run -- emit examples/m4-safe-values
+cargo run -- build examples/m4-safe-values
+```
+
+It exercises nullable flow, safe navigation/coalescing, immutable locals,
+records, typed SObject IDs, sealed results, exhaustive matching, generated
+helpers, and their source maps.
+
 ## Required verification
 
 ```bash
@@ -74,6 +86,8 @@ scripts/verify-apex-exec-m3.sh /path/to/pinned/apex-exec
 
 The script refuses any other revision, builds the backend with its lockfile,
 builds the M3 fixture, and requires a `passed` verification outcome.
+The pinned profile does not claim the M4 generated surface; an M4-only build
+requested with `--verify-apex-exec` records `unsupported` without launching it.
 
 ## Git workflow
 

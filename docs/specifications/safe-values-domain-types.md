@@ -2,8 +2,8 @@
 
 ## Status
 
-**Active in M4.** This document defines the complete M4 source, checking, and
-lowering contract. Anything not listed here remains unsupported.
+**Implemented in M4.** This document defines the complete M4 source, checking,
+and lowering contract. Anything not listed here remains unsupported.
 
 ## Top-level declarations
 
@@ -49,6 +49,13 @@ operator joins `T` and `T?` as `T?`. `left ?? right` requires a nullable left
 operand and a right operand assignable to the non-null underlying type; its
 result is non-null.
 
+Because Apex default-initializes fields, automatic properties, and uninitialized
+locals to null, M4 requires an initializer for every non-null class field and
+ordinary local. M4 automatic properties must be nullable; later constructor
+and accessor-body slices may establish non-null initialization through checked
+control flow. Record components and result payload slots are initialized by
+their compiler-generated constructors or factories.
+
 Ordinary member access or method calls through `T?` produce
 `type.nullable-dereference`. Safe navigation `value?.member` and
 `value?.method(...)` requires a nullable receiver and yields a nullable result.
@@ -57,6 +64,12 @@ Assignment through safe navigation is not supported.
 
 Nullable types lower to their ordinary Apex representation. Safe navigation
 and null coalescing lower to Apex `?.` and `??` respectively.
+
+Unchecked handwritten-Apex boundary methods conservatively return `T?` for
+reference-like `T` because the boundary summary carries no trusted nullability.
+`Map<K, V>.get` and `put` likewise return `V?`; callers must narrow or
+coalesce the possibly absent value. Erased `Object` retains Apex boundary
+behavior and may contain null.
 
 ## Flow-sensitive narrowing
 
@@ -104,7 +117,8 @@ let owner = new OwnerContact(contactId, 'owner@example.com');
 ```
 
 A record lowers to a final-field Apex class with a constructor in component
-order. The generated fields and constructor preserve source spelling.
+order. The generated fields and constructor preserve source spelling and use
+`global` accessibility when the record is global, otherwise `public`.
 Structural equality, hashing, inheritance, methods, default component values,
 and record destructuring are not part of M4.
 
@@ -160,19 +174,22 @@ return-complete.
 
 Sealed results lower to a generated Apex class containing an integer
 discriminant, payload slots, a private constructor, and one static factory per
-variant. A match evaluates its subject once into a collision-safe generated
-local and lowers to an exhaustive `if`/`else if` chain with typed payload
-bindings. No default branch is emitted because checking proves exhaustiveness.
+variant. Generated result members use `global` accessibility when the result
+is global, otherwise `public`. A match evaluates its subject once into a
+collision-safe generated local and lowers to an exhaustive `if`/`else if`
+chain with typed payload bindings. No default branch is emitted because
+checking proves exhaustiveness.
 
 ## Generated names and source maps
 
 M4 helpers continue to use the case-insensitively reserved
 `ZenithGenerated_` prefix. Match temporaries derive from stable source
-identities and byte offsets. Result discriminants, payload slots, factories,
-record constructors, and desugared match operations carry source-map segments
-pointing to the record component, variant, match subject, or arm that owns
-their semantics. Generated scaffolding never receives a fabricated Zenith
-span.
+identities and byte offsets. The prefix is rejected on user declarations,
+members, parameters, locals, record components, result variants, payloads, and
+match bindings. Result discriminants, payload slots, factories, record
+constructors, and desugared match operations carry source-map segments pointing
+to the record component, variant, match subject, or arm that owns their
+semantics. Generated scaffolding never receives a fabricated Zenith span.
 
 ## Diagnostics
 
@@ -182,6 +199,7 @@ M4 adds these stable diagnostic codes:
 - `resolve.duplicate-result-variant`
 - `resolve.unknown-result-variant`
 - `type.invalid-nullable-type`
+- `type.uninitialized-non-null`
 - `type.nullable-dereference`
 - `type.invalid-safe-navigation`
 - `type.invalid-null-coalescing`

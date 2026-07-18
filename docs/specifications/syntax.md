@@ -2,9 +2,12 @@
 
 ## Status
 
-**Implemented in M2.** This document is the observable contract for Zenith's
-token-to-immutable-AST boundary. Parser acceptance does not imply name
-resolution, type checking, lowering, Apex emission, or runtime compatibility.
+**Implemented baseline from M2.** This document is the observable contract for
+Zenith's Apex-shaped token-to-immutable-AST boundary. M4 adds record, sealed
+result, SObject domain, `let`, and `match` syntax as specified in
+[`safe-values-domain-types.md`](safe-values-domain-types.md). Parser acceptance
+does not imply name resolution, type checking, lowering, Apex emission, or
+runtime compatibility.
 
 ## Compilation units and declarations
 
