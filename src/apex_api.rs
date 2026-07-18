@@ -353,6 +353,7 @@ fn type_from_parts(name: &str, canonical: &str, arguments: Vec<Type>) -> Result<
         "double" if arity == 0 => Type::Double,
         "string" if arity == 0 => Type::String,
         "object" if arity == 0 => Type::Object,
+        "id" if arity == 0 => Type::Id(None),
         "list" if arity == 1 => Type::List(Box::new(arguments[0].clone())),
         "set" if arity == 1 => Type::Set(Box::new(arguments[0].clone())),
         "map" if arity == 2 => Type::Map(

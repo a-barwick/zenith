@@ -1,0 +1,231 @@
+== build.json ==
+{
+  "formatVersion": 1,
+  "salesforceApiVersion": "65.0",
+  "sfdxProject": "sfdx-project.json",
+  "sources": ["src/Account.zen", "src/AccountSummary.zen", "src/Contact.zen", "src/LookupResult.zen", "src/OwnerContact.zen", "src/SafeValueService.zen"],
+  "classes": [
+    {"name": "AccountSummary", "apex": "generated/main/default/classes/AccountSummary.cls", "metadata": "generated/main/default/classes/AccountSummary.cls-meta.xml", "sourceMap": "maps/AccountSummary.cls.map.json"},
+    {"name": "LookupResult", "apex": "generated/main/default/classes/LookupResult.cls", "metadata": "generated/main/default/classes/LookupResult.cls-meta.xml", "sourceMap": "maps/LookupResult.cls.map.json"},
+    {"name": "OwnerContact", "apex": "generated/main/default/classes/OwnerContact.cls", "metadata": "generated/main/default/classes/OwnerContact.cls-meta.xml", "sourceMap": "maps/OwnerContact.cls.map.json"},
+    {"name": "SafeValueService", "apex": "generated/main/default/classes/SafeValueService.cls", "metadata": "generated/main/default/classes/SafeValueService.cls-meta.xml", "sourceMap": "maps/SafeValueService.cls.map.json"}
+  ],
+  "verification": []
+}
+== generated/main/default/classes/AccountSummary.cls ==
+public class AccountSummary {
+    public final Id accountId;
+    public final OwnerContact owner;
+
+    public AccountSummary(Id accountId, OwnerContact owner) {
+        this.accountId = accountId;
+        this.owner = owner;
+    }
+}
+== generated/main/default/classes/AccountSummary.cls-meta.xml ==
+<?xml version="1.0" encoding="UTF-8"?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <status>Active</status>
+</ApexClass>
+== generated/main/default/classes/LookupResult.cls ==
+public class LookupResult {
+    public Integer ZenithGenerated_tag { get; private set; }
+    public AccountSummary ZenithGenerated_v0_p0 { get; private set; }
+    public String ZenithGenerated_v1_p0 { get; private set; }
+
+    private LookupResult() {}
+
+    public static LookupResult Found(AccountSummary summary) {
+        LookupResult ZenithGenerated_result = new LookupResult();
+        ZenithGenerated_result.ZenithGenerated_tag = 0;
+        ZenithGenerated_result.ZenithGenerated_v0_p0 = summary;
+        return ZenithGenerated_result;
+    }
+
+    public static LookupResult Missing(String reason) {
+        LookupResult ZenithGenerated_result = new LookupResult();
+        ZenithGenerated_result.ZenithGenerated_tag = 1;
+        ZenithGenerated_result.ZenithGenerated_v1_p0 = reason;
+        return ZenithGenerated_result;
+    }
+}
+== generated/main/default/classes/LookupResult.cls-meta.xml ==
+<?xml version="1.0" encoding="UTF-8"?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <status>Active</status>
+</ApexClass>
+== generated/main/default/classes/OwnerContact.cls ==
+public class OwnerContact {
+    public final Id contactId;
+    public final String email;
+
+    public OwnerContact(Id contactId, String email) {
+        this.contactId = contactId;
+        this.email = email;
+    }
+}
+== generated/main/default/classes/OwnerContact.cls-meta.xml ==
+<?xml version="1.0" encoding="UTF-8"?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <status>Active</status>
+</ApexClass>
+== generated/main/default/classes/SafeValueService.cls ==
+public class SafeValueService {
+    public static LookupResult found(Id requested, OwnerContact owner) {
+        AccountSummary summary = new AccountSummary(requested, owner);
+        return LookupResult.Found(summary);
+    }
+
+    public static String describe(Id requested, LookupResult result) {
+        {
+            LookupResult ZenithGenerated_match_5_358 = result;
+            if (ZenithGenerated_match_5_358.ZenithGenerated_tag == 0) {
+                AccountSummary summary = ZenithGenerated_match_5_358.ZenithGenerated_v0_p0;
+                if (summary.accountId != requested) {
+                    return 'mismatched account';
+                }
+                String email = summary.owner?.email ?? 'unassigned';
+                return email;
+            }
+            else {
+                String reason = ZenithGenerated_match_5_358.ZenithGenerated_v1_p0;
+                return reason;
+            }
+        }
+    }
+
+    public static String narrowed(OwnerContact owner) {
+        if (owner == null) {
+            return 'none';
+        }
+        return owner.email;
+    }
+}
+== generated/main/default/classes/SafeValueService.cls-meta.xml ==
+<?xml version="1.0" encoding="UTF-8"?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <status>Active</status>
+</ApexClass>
+== maps/AccountSummary.cls.map.json ==
+{
+  "version": 1,
+  "generated": "generated/main/default/classes/AccountSummary.cls",
+  "source": "src/AccountSummary.zen",
+  "segments": [
+    {"generated": [13, 27], "source": [0, 83]},
+    {"generated": [50, 59], "source": [34, 55]},
+    {"generated": [91, 96], "source": [61, 80]},
+    {"generated": [110, 124], "source": [0, 83]},
+    {"generated": [128, 137], "source": [34, 55]},
+    {"generated": [152, 157], "source": [61, 80]},
+    {"generated": [174, 183], "source": [34, 55]},
+    {"generated": [186, 195], "source": [34, 55]},
+    {"generated": [210, 215], "source": [61, 80]},
+    {"generated": [218, 223], "source": [61, 80]}
+  ]
+}
+== maps/LookupResult.cls.map.json ==
+{
+  "version": 1,
+  "generated": "generated/main/default/classes/LookupResult.cls",
+  "source": "src/LookupResult.zen",
+  "segments": [
+    {"generated": [13, 25], "source": [0, 110]},
+    {"generated": [47, 66], "source": [0, 110]},
+    {"generated": [115, 136], "source": [51, 73]},
+    {"generated": [177, 198], "source": [93, 106]},
+    {"generated": [234, 246], "source": [0, 110]},
+    {"generated": [284, 289], "source": [40, 75]},
+    {"generated": [305, 312], "source": [51, 73]},
+    {"generated": [413, 432], "source": [40, 75]},
+    {"generated": [435, 436], "source": [40, 75]},
+    {"generated": [469, 490], "source": [51, 73]},
+    {"generated": [493, 500], "source": [51, 73]},
+    {"generated": [579, 586], "source": [80, 108]},
+    {"generated": [594, 600], "source": [93, 106]},
+    {"generated": [701, 720], "source": [80, 108]},
+    {"generated": [723, 724], "source": [80, 108]},
+    {"generated": [757, 778], "source": [93, 106]},
+    {"generated": [781, 787], "source": [93, 106]}
+  ]
+}
+== maps/OwnerContact.cls.map.json ==
+{
+  "version": 1,
+  "generated": "generated/main/default/classes/OwnerContact.cls",
+  "source": "src/OwnerContact.zen",
+  "segments": [
+    {"generated": [13, 25], "source": [0, 64]},
+    {"generated": [48, 57], "source": [27, 48]},
+    {"generated": [83, 88], "source": [50, 62]},
+    {"generated": [102, 114], "source": [0, 64]},
+    {"generated": [118, 127], "source": [27, 48]},
+    {"generated": [136, 141], "source": [50, 62]},
+    {"generated": [158, 167], "source": [27, 48]},
+    {"generated": [170, 179], "source": [27, 48]},
+    {"generated": [194, 199], "source": [50, 62]},
+    {"generated": [202, 207], "source": [50, 62]}
+  ]
+}
+== maps/SafeValueService.cls.map.json ==
+{
+  "version": 1,
+  "generated": "generated/main/default/classes/SafeValueService.cls",
+  "source": "src/SafeValueService.zen",
+  "segments": [
+    {"generated": [13, 29], "source": [0, 895]},
+    {"generated": [63, 68], "source": [36, 246]},
+    {"generated": [72, 81], "source": [78, 99]},
+    {"generated": [96, 101], "source": [109, 128]},
+    {"generated": [128, 135], "source": [145, 196]},
+    {"generated": [142, 156], "source": [159, 195]},
+    {"generated": [157, 166], "source": [178, 187]},
+    {"generated": [168, 173], "source": [189, 194]},
+    {"generated": [191, 203], "source": [212, 224]},
+    {"generated": [204, 209], "source": [212, 239]},
+    {"generated": [210, 217], "source": [231, 238]},
+    {"generated": [252, 260], "source": [252, 735]},
+    {"generated": [264, 273], "source": [291, 312]},
+    {"generated": [288, 294], "source": [322, 341]},
+    {"generated": [333, 360], "source": [365, 371]},
+    {"generated": [363, 369], "source": [365, 371]},
+    {"generated": [387, 414], "source": [365, 371]},
+    {"generated": [415, 434], "source": [387, 639]},
+    {"generated": [438, 439], "source": [387, 639]},
+    {"generated": [474, 481], "source": [398, 405]},
+    {"generated": [484, 511], "source": [365, 371]},
+    {"generated": [512, 533], "source": [398, 405]},
+    {"generated": [555, 562], "source": [429, 436]},
+    {"generated": [563, 572], "source": [429, 446]},
+    {"generated": [576, 585], "source": [450, 459]},
+    {"generated": [616, 636], "source": [490, 510]},
+    {"generated": [679, 684], "source": [546, 595]},
+    {"generated": [687, 694], "source": [558, 565]},
+    {"generated": [695, 700], "source": [558, 571]},
+    {"generated": [702, 707], "source": [558, 578]},
+    {"generated": [711, 723], "source": [582, 594]},
+    {"generated": [748, 753], "source": [619, 624]},
+    {"generated": [811, 817], "source": [665, 671]},
+    {"generated": [820, 847], "source": [365, 371]},
+    {"generated": [848, 869], "source": [665, 671]},
+    {"generated": [894, 900], "source": [698, 704]},
+    {"generated": [958, 966], "source": [741, 893]},
+    {"generated": [980, 985], "source": [771, 790]},
+    {"generated": [1001, 1006], "source": [806, 811]},
+    {"generated": [1010, 1014], "source": [815, 819]},
+    {"generated": [1037, 1043], "source": [842, 848]},
+    {"generated": [1070, 1075], "source": [875, 880]},
+    {"generated": [1076, 1081], "source": [875, 886]}
+  ]
+}
+== sfdx-project.json ==
+{
+  "packageDirectories": [
+    {"path": "generated", "default": true}
+  ],
+  "sourceApiVersion": "65.0"
+}

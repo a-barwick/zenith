@@ -3,6 +3,7 @@ use crate::{apex_ir, hir};
 pub fn lower(program: &hir::Program) -> apex_ir::Program {
     apex_ir::Program {
         classes: program.classes.iter().map(lower_class).collect(),
+        source_paths: program.source_paths.clone(),
     }
 }
 
@@ -13,6 +14,30 @@ fn lower_class(class: &hir::Class) -> apex_ir::Class {
         members: class.members.iter().map(lower_member).collect(),
         source_path: class.source_path.clone(),
         origin: class.span,
+        kind: match &class.kind {
+            hir::ClassKind::Class => apex_ir::ClassKind::Class,
+            hir::ClassKind::Record { components } => apex_ir::ClassKind::Record {
+                components: components.iter().map(lower_parameter).collect(),
+            },
+            hir::ClassKind::SealedResult { variants } => apex_ir::ClassKind::SealedResult {
+                variants: variants
+                    .iter()
+                    .map(|variant| apex_ir::ResultVariant {
+                        name: variant.name.clone(),
+                        payloads: variant.payloads.iter().map(lower_parameter).collect(),
+                        origin: variant.span,
+                    })
+                    .collect(),
+            },
+        },
+    }
+}
+
+fn lower_parameter(parameter: &hir::Parameter) -> apex_ir::Parameter {
+    apex_ir::Parameter {
+        name: parameter.name.clone(),
+        ty: parameter.ty.clone(),
+        origin: parameter.span,
     }
 }
 
@@ -44,15 +69,7 @@ fn lower_member(member: &hir::Member) -> apex_ir::Member {
             name: method.name.clone(),
             modifiers: method.modifiers.clone(),
             return_type: method.return_type.clone(),
-            parameters: method
-                .parameters
-                .iter()
-                .map(|parameter| apex_ir::Parameter {
-                    name: parameter.name.clone(),
-                    ty: parameter.ty.clone(),
-                    origin: parameter.span,
-                })
-                .collect(),
+            parameters: method.parameters.iter().map(lower_parameter).collect(),
             body: lower_block(&method.body),
             origin: method.span,
         }),
@@ -73,6 +90,7 @@ fn lower_statement(statement: &hir::Statement) -> apex_ir::Statement {
             ty,
             name,
             initializer,
+            ..
         } => apex_ir::StatementKind::Variable {
             ty: ty.clone(),
             name: name.clone(),
@@ -116,6 +134,11 @@ fn lower_statement(statement: &hir::Statement) -> apex_ir::Statement {
             iterable: lower_expression(iterable),
             body: Box::new(lower_statement(body)),
         },
+        hir::StatementKind::Match {
+            subject,
+            result_name: _,
+            arms,
+        } => lower_match(subject, arms, statement.span).kind,
         hir::StatementKind::Return(expression) => {
             apex_ir::StatementKind::Return(expression.as_ref().map(lower_expression))
         }
@@ -126,6 +149,103 @@ fn lower_statement(statement: &hir::Statement) -> apex_ir::Statement {
     apex_ir::Statement {
         kind,
         origin: statement.span,
+    }
+}
+
+fn lower_match(
+    subject: &hir::Expression,
+    arms: &[hir::MatchArm],
+    origin: crate::source::Span,
+) -> apex_ir::Statement {
+    let temporary = format!(
+        "ZenithGenerated_match_{}_{}",
+        origin.source().raw(),
+        origin.start()
+    );
+    let declaration = apex_ir::Statement {
+        kind: apex_ir::StatementKind::Variable {
+            ty: subject.ty.clone(),
+            name: temporary.clone(),
+            initializer: Some(lower_expression(subject)),
+        },
+        origin: subject.span,
+    };
+    let mut lowered_arms = Vec::new();
+    for arm in arms {
+        let mut statements = Vec::new();
+        for (payload_index, binding) in arm.bindings.iter().enumerate() {
+            statements.push(apex_ir::Statement {
+                kind: apex_ir::StatementKind::Variable {
+                    ty: binding.ty.clone(),
+                    name: binding.name.clone(),
+                    initializer: Some(apex_ir::Expression {
+                        kind: apex_ir::ExpressionKind::Member {
+                            object: Box::new(apex_ir::Expression {
+                                kind: apex_ir::ExpressionKind::Name(temporary.clone()),
+                                origin: subject.span,
+                            }),
+                            name: format!(
+                                "ZenithGenerated_v{}_p{}",
+                                arm.variant_index, payload_index
+                            ),
+                            safe: false,
+                        },
+                        origin: binding.span,
+                    }),
+                },
+                origin: binding.span,
+            });
+        }
+        statements.extend(arm.body.statements.iter().map(lower_statement));
+        lowered_arms.push((
+            apex_ir::Expression {
+                kind: apex_ir::ExpressionKind::Binary {
+                    left: Box::new(apex_ir::Expression {
+                        kind: apex_ir::ExpressionKind::Member {
+                            object: Box::new(apex_ir::Expression {
+                                kind: apex_ir::ExpressionKind::Name(temporary.clone()),
+                                origin: subject.span,
+                            }),
+                            name: "ZenithGenerated_tag".into(),
+                            safe: false,
+                        },
+                        origin: arm.span,
+                    }),
+                    operator: "==".into(),
+                    right: Box::new(apex_ir::Expression {
+                        kind: apex_ir::ExpressionKind::Integer(arm.variant_index.to_string()),
+                        origin: arm.span,
+                    }),
+                },
+                origin: arm.span,
+            },
+            apex_ir::Statement {
+                kind: apex_ir::StatementKind::Block(apex_ir::Block {
+                    statements,
+                    origin: arm.span,
+                }),
+                origin: arm.span,
+            },
+        ));
+    }
+    let mut branch = lowered_arms.pop().map(|(_, body)| body);
+    while let Some((condition, body)) = lowered_arms.pop() {
+        branch = Some(apex_ir::Statement {
+            kind: apex_ir::StatementKind::If {
+                condition,
+                then_branch: Box::new(body),
+                else_branch: branch.map(Box::new),
+            },
+            origin,
+        });
+    }
+    let mut statements = vec![declaration];
+    if let Some(branch) = branch {
+        statements.push(branch);
+    }
+    apex_ir::Statement {
+        kind: apex_ir::StatementKind::Block(apex_ir::Block { statements, origin }),
+        origin,
     }
 }
 
@@ -158,19 +278,28 @@ fn lower_expression(expression: &hir::Expression) -> apex_ir::Expression {
         Hir::Parenthesized(inner) => {
             apex_ir::ExpressionKind::Parenthesized(Box::new(lower_expression(inner)))
         }
+        Hir::New { name, arguments } => apex_ir::ExpressionKind::New {
+            name: name.clone(),
+            arguments: arguments.iter().map(lower_expression).collect(),
+        },
         Hir::Call {
             receiver,
             name,
             arguments,
+            safe,
             ..
         } => apex_ir::ExpressionKind::Call {
             receiver: receiver.as_deref().map(lower_expression).map(Box::new),
             name: name.clone(),
             arguments: arguments.iter().map(lower_expression).collect(),
+            safe: *safe,
         },
-        Hir::Member { object, name, .. } => apex_ir::ExpressionKind::Member {
+        Hir::Member {
+            object, name, safe, ..
+        } => apex_ir::ExpressionKind::Member {
             object: Box::new(lower_expression(object)),
             name: name.clone(),
+            safe: *safe,
         },
         Hir::Index { object, index, .. } => apex_ir::ExpressionKind::Index {
             object: Box::new(lower_expression(object)),
@@ -221,7 +350,10 @@ mod tests {
 
     #[test]
     fn lowers_empty_hir_into_a_distinct_empty_apex_program() {
-        let lowered = lower(&hir::Program { classes: vec![] });
+        let lowered = lower(&hir::Program {
+            classes: vec![],
+            source_paths: vec![],
+        });
         assert!(lowered.classes.is_empty());
     }
 }

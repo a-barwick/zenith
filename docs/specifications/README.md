@@ -7,6 +7,7 @@ implementation but do not replace executable evidence.
 - [Lexical structure](lexical-structure.md)
 - [Parsed syntax](syntax.md)
 - [Typed Apex baseline and emission](typed-apex-baseline.md)
+- [Safe values and domain types](safe-values-domain-types.md)
 - [Diagnostics](diagnostics.md)
 - [Governor effects](governor-effects.md)
 - [Testing and test generation](testing-and-test-generation.md)

@@ -1,0 +1,1 @@
+public record OwnerContact(Id<Contact> contactId, String email);

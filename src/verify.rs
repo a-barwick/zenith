@@ -3,6 +3,7 @@ use std::process::Command;
 
 pub const APEX_EXEC_M3_REVISION: &str = "1e4f1ca1938abfc996651ae447f227e0db680b6a";
 pub const APEX_EXEC_M3_PROFILE: &str = "zenith-m3-apex-baseline";
+pub const APEX_EXEC_M4_PROFILE: &str = "zenith-m4-safe-values";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum VerificationOutcome {
@@ -53,7 +54,24 @@ impl ProcessVerifier {
         }
     }
 
+    pub fn with_capability_profile(mut self, capability_profile: impl Into<String>) -> Self {
+        self.capability_profile = capability_profile.into();
+        self
+    }
+
     pub fn verify(&self, generated_classes: &Path) -> VerificationResult {
+        if self.backend == "apex-exec" && self.capability_profile != APEX_EXEC_M3_PROFILE {
+            return self.result(
+                VerificationOutcome::Unsupported,
+                None,
+                String::new(),
+                String::new(),
+                format!(
+                    "Apex Exec revision `{}` does not declare capability profile `{}`",
+                    self.revision, self.capability_profile
+                ),
+            );
+        }
         if self.backend == "apex-exec" && self.revision != APEX_EXEC_M3_REVISION {
             return self.result(
                 VerificationOutcome::Unsupported,
@@ -126,7 +144,9 @@ impl ProcessVerifier {
 
 #[cfg(test)]
 mod tests {
-    use super::{APEX_EXEC_M3_REVISION, ProcessVerifier, VerificationOutcome};
+    use super::{
+        APEX_EXEC_M3_REVISION, APEX_EXEC_M4_PROFILE, ProcessVerifier, VerificationOutcome,
+    };
     use std::path::{Path, PathBuf};
 
     fn verifier(executable: PathBuf) -> ProcessVerifier {
@@ -135,6 +155,13 @@ mod tests {
 
     #[test]
     fn unsupported_profiles_and_missing_executables_are_distinct() {
+        let unsupported_profile = verifier(PathBuf::from("/usr/bin/true"))
+            .with_capability_profile(APEX_EXEC_M4_PROFILE)
+            .verify(Path::new("."));
+        assert_eq!(
+            unsupported_profile.outcome,
+            VerificationOutcome::Unsupported
+        );
         let unsupported =
             ProcessVerifier::apex_exec("unused", "not-the-pinned-revision").verify(Path::new("."));
         assert_eq!(unsupported.outcome, VerificationOutcome::Unsupported);

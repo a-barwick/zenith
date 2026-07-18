@@ -5,6 +5,7 @@ use crate::{Diagnostic, Phase};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Program {
     pub classes: Vec<Class>,
+    pub source_paths: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -13,6 +14,21 @@ pub struct Class {
     pub modifiers: Vec<String>,
     pub members: Vec<Member>,
     pub source_path: String,
+    pub origin: Span,
+    pub kind: ClassKind,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ClassKind {
+    Class,
+    Record { components: Vec<Parameter> },
+    SealedResult { variants: Vec<ResultVariant> },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResultVariant {
+    pub name: String,
+    pub payloads: Vec<Parameter>,
     pub origin: Span,
 }
 
@@ -138,14 +154,20 @@ pub enum ExpressionKind {
     Null,
     This,
     Parenthesized(Box<Expression>),
+    New {
+        name: String,
+        arguments: Vec<Expression>,
+    },
     Call {
         receiver: Option<Box<Expression>>,
         name: String,
         arguments: Vec<Expression>,
+        safe: bool,
     },
     Member {
         object: Box<Expression>,
         name: String,
+        safe: bool,
     },
     Index {
         object: Box<Expression>,
@@ -186,15 +208,40 @@ pub fn validate(program: &Program) -> Vec<Diagnostic> {
                 "Apex IR contains an invalid or reserved class name",
             ));
         }
+        match &class.kind {
+            ClassKind::Record { components } => {
+                for component in components {
+                    if !is_emittable_value_type(&component.ty) {
+                        diagnostics.push(invalid_ir(
+                            component.origin,
+                            "Apex IR record component has a non-emittable type",
+                        ));
+                    }
+                }
+            }
+            ClassKind::SealedResult { variants } => {
+                for variant in variants {
+                    for payload in &variant.payloads {
+                        if !is_emittable_value_type(&payload.ty) {
+                            diagnostics.push(invalid_ir(
+                                payload.origin,
+                                "Apex IR result payload has a non-emittable type",
+                            ));
+                        }
+                    }
+                }
+            }
+            ClassKind::Class => {}
+        }
         for member in &class.members {
             match member {
-                Member::Field(field) if matches!(field.ty, Type::Void | Type::Error) => {
+                Member::Field(field) if !is_emittable_value_type(&field.ty) => {
                     diagnostics.push(invalid_ir(
                         field.origin,
                         "Apex IR field has a non-emittable type",
                     ));
                 }
-                Member::Property(property) if matches!(property.ty, Type::Void | Type::Error) => {
+                Member::Property(property) if !is_emittable_value_type(&property.ty) => {
                     diagnostics.push(invalid_ir(
                         property.origin,
                         "Apex IR property has a non-emittable type",
@@ -205,7 +252,7 @@ pub fn validate(program: &Program) -> Vec<Diagnostic> {
                         || method
                             .parameters
                             .iter()
-                            .any(|parameter| matches!(parameter.ty, Type::Void | Type::Error))
+                            .any(|parameter| !is_emittable_value_type(&parameter.ty))
                     {
                         diagnostics.push(invalid_ir(
                             method.origin,
@@ -218,6 +265,17 @@ pub fn validate(program: &Program) -> Vec<Diagnostic> {
         }
     }
     diagnostics
+}
+
+fn is_emittable_value_type(ty: &Type) -> bool {
+    match ty {
+        Type::Void | Type::Null | Type::Error | Type::SObjectDomain(_) => false,
+        Type::List(element) | Type::Set(element) | Type::Nullable(element) => {
+            is_emittable_value_type(element)
+        }
+        Type::Map(key, value) => is_emittable_value_type(key) && is_emittable_value_type(value),
+        _ => true,
+    }
 }
 
 fn invalid_ir(span: Span, message: &str) -> Diagnostic {
@@ -239,7 +297,9 @@ mod tests {
                 members: vec![],
                 source_path: "src/Bad.zen".into(),
                 origin: span,
+                kind: super::ClassKind::Class,
             }],
+            source_paths: vec!["src/Bad.zen".into()],
         });
         assert_eq!(diagnostics[0].code, "lower.invalid-apex-ir");
     }

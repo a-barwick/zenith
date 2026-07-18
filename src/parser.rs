@@ -1,8 +1,8 @@
 use crate::ast::{
     AccessorKind, Block, ClassDeclaration, ClassMember, CompilationUnit, ConstructorDeclaration,
-    Expression, ExpressionKind, FieldDeclaration, ForInitializer, MethodDeclaration, Modifier,
-    Operator, Parameter, PropertyAccessor, PropertyDeclaration, Statement, StatementKind, Type,
-    TypeName, VariableDeclaration,
+    Expression, ExpressionKind, FieldDeclaration, ForInitializer, LetDeclaration, MatchArm,
+    MethodDeclaration, Modifier, Operator, Parameter, PropertyAccessor, PropertyDeclaration,
+    RecordComponent, ResultVariant, Statement, StatementKind, Type, TypeName, VariableDeclaration,
 };
 use crate::diagnostic::{Diagnostic, Phase};
 use crate::source::{SourceFile, Span};
@@ -118,8 +118,8 @@ impl<'a> Parser<'a> {
         let mut declarations = Vec::new();
         while !self.at_eof() {
             let checkpoint = self.cursor;
-            if self.at_class_start() {
-                if let Some(declaration) = self.parse_class_declaration() {
+            if self.at_declaration_start() {
+                if let Some(declaration) = self.parse_declaration() {
                     declarations.push(declaration);
                 }
             } else {
@@ -139,18 +139,39 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_class_declaration(&mut self) -> Option<ClassDeclaration> {
+    fn parse_declaration(&mut self) -> Option<ClassDeclaration> {
         let start = self.current_span();
         let modifiers = self.parse_modifiers(ModifierContext::Class);
-        if self.take_keyword("class").is_none() {
-            self.error(
-                "parse.expected-declaration",
-                "expected `class` after class modifiers",
-                "a top-level declaration must be a class",
-            );
-            self.synchronize_declaration();
-            return None;
+        if self.take_keyword("class").is_some() {
+            return self.parse_class_declaration_tail(start, modifiers);
         }
+        if self.take_keyword("record").is_some() {
+            return self.parse_record_declaration(start, modifiers);
+        }
+        if self.take_keyword("sealed").is_some() {
+            if self.take_contextual("result").is_none() {
+                self.expected_token("`result` after `sealed`");
+                return None;
+            }
+            return self.parse_result_declaration(start, modifiers);
+        }
+        if self.take_keyword("sobject").is_some() {
+            return self.parse_sobject_declaration(start, modifiers);
+        }
+        self.error(
+            "parse.expected-declaration",
+            "expected a class, record, sealed result, or SObject declaration",
+            "a top-level declaration begins with `class`, `record`, `sealed result`, or `sobject`",
+        );
+        self.synchronize_declaration();
+        None
+    }
+
+    fn parse_class_declaration_tail(
+        &mut self,
+        start: Span,
+        modifiers: Vec<Modifier>,
+    ) -> Option<ClassDeclaration> {
         let name = self.parse_identifier("class name")?;
 
         let extends = if self.take_keyword("extends").is_some() {
@@ -205,6 +226,100 @@ impl<'a> Parser<'a> {
             members,
             join_spans(start, end),
         ))
+    }
+
+    fn parse_record_declaration(
+        &mut self,
+        start: Span,
+        modifiers: Vec<Modifier>,
+    ) -> Option<ClassDeclaration> {
+        let name = self.parse_identifier("record name")?;
+        let components = self.parse_record_components()?;
+        let end = self.expect_member_semicolon();
+        Some(ClassDeclaration::new_record(
+            modifiers,
+            name,
+            components,
+            join_spans(start, end),
+        ))
+    }
+
+    fn parse_result_declaration(
+        &mut self,
+        start: Span,
+        modifiers: Vec<Modifier>,
+    ) -> Option<ClassDeclaration> {
+        let name = self.parse_identifier("sealed result name")?;
+        self.expect_punctuation("{", "`{` to begin the sealed result body")?;
+        let mut variants = Vec::new();
+        while !self.at_punctuation("}") && !self.at_eof() {
+            let variant_start = self.current_span();
+            if self.take_keyword("case").is_none() {
+                self.error(
+                    "parse.expected-member",
+                    "expected a sealed result variant",
+                    "result variants begin with `case`",
+                );
+                self.synchronize_member();
+                continue;
+            }
+            let variant_name = self.parse_identifier("result variant name")?;
+            let payloads = if self.at_punctuation("(") {
+                self.parse_record_components()?
+            } else {
+                Vec::new()
+            };
+            let end = self.expect_member_semicolon();
+            variants.push(ResultVariant::new(
+                variant_name,
+                payloads,
+                join_spans(variant_start, end),
+            ));
+        }
+        let end = if let Some(close) = self.take_punctuation("}") {
+            close
+        } else {
+            self.expected_token("`}` to close the sealed result body");
+            self.current_span()
+        };
+        Some(ClassDeclaration::new_result(
+            modifiers,
+            name,
+            variants,
+            join_spans(start, end),
+        ))
+    }
+
+    fn parse_sobject_declaration(
+        &mut self,
+        start: Span,
+        modifiers: Vec<Modifier>,
+    ) -> Option<ClassDeclaration> {
+        let name = self.parse_identifier("SObject domain name")?;
+        let end = self.expect_member_semicolon();
+        Some(ClassDeclaration::new_sobject(
+            modifiers,
+            name,
+            join_spans(start, end),
+        ))
+    }
+
+    fn parse_record_components(&mut self) -> Option<Vec<RecordComponent>> {
+        self.expect_punctuation("(", "`(` before the component list")?;
+        let mut components = Vec::new();
+        if !self.at_punctuation(")") {
+            loop {
+                let ty = self.parse_type()?;
+                let name = self.parse_identifier("component name")?;
+                let span = join_spans(ty.span(), name.span());
+                components.push(RecordComponent::new(ty, name, span));
+                if self.take_punctuation(",").is_none() {
+                    break;
+                }
+            }
+        }
+        self.expect_punctuation(")", "`)` after the component list")?;
+        Some(components)
     }
 
     fn parse_class_member(&mut self) -> Option<ClassMember> {
@@ -445,15 +560,26 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let nullable = if self.pending_type_closers.is_empty()
-            && let Some(question) = self.take_operator("?")
-        {
-            end = question;
-            true
-        } else {
-            false
-        };
-        Some(Type::new(name, arguments, nullable, join_spans(span, end)))
+        let mut nullable_suffixes = 0;
+        if self.pending_type_closers.is_empty() {
+            loop {
+                if let Some(question) = self.take_operator("?") {
+                    end = question;
+                    nullable_suffixes += 1;
+                } else if let Some(questions) = self.take_operator("??") {
+                    end = questions;
+                    nullable_suffixes += 2;
+                } else {
+                    break;
+                }
+            }
+        }
+        Some(Type::new(
+            name,
+            arguments,
+            nullable_suffixes,
+            join_spans(span, end),
+        ))
     }
 
     fn parse_block(&mut self) -> Option<Block> {
@@ -498,6 +624,26 @@ impl<'a> Parser<'a> {
         }
         if let Some(start) = self.take_keyword("for") {
             return self.parse_for(start);
+        }
+        if let Some(start) = self.take_keyword("let") {
+            let name = self.parse_identifier("immutable binding name")?;
+            if self.take_operator("=").is_none() {
+                self.expected_token("`=` after the immutable binding name");
+                return None;
+            }
+            let initializer = self.parse_expression()?;
+            let end = self.expect_statement_semicolon();
+            return Some(Statement::new(
+                StatementKind::Let(LetDeclaration::new(
+                    name,
+                    initializer,
+                    join_spans(start, end),
+                )),
+                join_spans(start, end),
+            ));
+        }
+        if let Some(start) = self.take_keyword("match") {
+            return self.parse_match(start);
         }
         if let Some(start) = self.take_keyword("return") {
             let expression = if self.at_punctuation(";") {
@@ -676,6 +822,52 @@ impl<'a> Parser<'a> {
                 update,
                 body,
             },
+            join_spans(start, end),
+        ))
+    }
+
+    fn parse_match(&mut self, start: Span) -> Option<Statement> {
+        self.expect_punctuation("(", "`(` after `match`")?;
+        let subject = self.parse_expression()?;
+        self.expect_punctuation(")", "`)` after the match subject")?;
+        self.expect_punctuation("{", "`{` to begin the match arms")?;
+        let mut arms = Vec::new();
+        while !self.at_punctuation("}") && !self.at_eof() {
+            let arm_start = self.current_span();
+            if self.take_keyword("when").is_none() {
+                self.error(
+                    "parse.expected-token",
+                    "expected `when` before a match arm",
+                    "match arms begin with `when`",
+                );
+                self.synchronize_statement();
+                continue;
+            }
+            let variant = self.parse_identifier("result variant name")?;
+            let mut bindings = Vec::new();
+            if self.take_punctuation("(").is_some() {
+                if !self.at_punctuation(")") {
+                    loop {
+                        bindings.push(self.parse_identifier("match binding name")?);
+                        if self.take_punctuation(",").is_none() {
+                            break;
+                        }
+                    }
+                }
+                self.expect_punctuation(")", "`)` after match bindings")?;
+            }
+            let body = self.parse_block()?;
+            let span = join_spans(arm_start, body.span());
+            arms.push(MatchArm::new(variant, bindings, body, span));
+        }
+        let end = if let Some(close) = self.take_punctuation("}") {
+            close
+        } else {
+            self.expected_token("`}` to close the match statement");
+            self.current_span()
+        };
+        Some(Statement::new(
+            StatementKind::Match { subject, arms },
             join_spans(start, end),
         ))
     }
@@ -1157,7 +1349,7 @@ impl<'a> Parser<'a> {
                 return None;
             }
         }
-        if matches!(
+        while matches!(
             self.tokens.get(index).map(Token::kind),
             Some(TokenKind::Operator("?"))
         ) {
@@ -1188,8 +1380,11 @@ impl<'a> Parser<'a> {
         self.token_is_name(self.cursor)
     }
 
-    fn at_class_start(&self) -> bool {
+    fn at_declaration_start(&self) -> bool {
         self.at_keyword("class")
+            || self.at_keyword("record")
+            || self.at_keyword("sealed")
+            || self.at_keyword("sobject")
             || matches!(
                 self.current().kind(),
                 TokenKind::Keyword(word) if SIMPLE_CLASS_MODIFIERS.contains(&word.as_str())
@@ -1217,6 +1412,8 @@ impl<'a> Parser<'a> {
                             | "throw"
                             | "break"
                             | "continue"
+                            | "let"
+                            | "match"
                     )
             )
             || self.looks_like_variable_declaration(false)
@@ -1224,7 +1421,7 @@ impl<'a> Parser<'a> {
 
     fn synchronize_declaration(&mut self) {
         while !self.at_eof() {
-            if self.at_class_start() {
+            if self.at_declaration_start() {
                 return;
             }
             self.bump();
@@ -2177,5 +2374,51 @@ mod tests {
         let unit = result.unit.unwrap();
         assert!(unit.declarations().is_empty());
         assert_eq!(unit.span().start(), unit.span().end());
+    }
+
+    #[test]
+    fn parses_m4_declarations_let_and_exhaustive_match_syntax_without_semantics() {
+        let result = parse_text(
+            "public sobject Account;
+             public record Summary(Id<Account> id, String? label);
+             public sealed result Choice {
+                 case Found(Summary value);
+                 case Missing;
+             }
+             public class Service {
+                 public static String run(Choice result) {
+                     let fallback = 'none';
+                     match (result) {
+                         when Found(value) { return value.label ?? fallback; }
+                         when Missing { return fallback; }
+                     }
+                 }
+             }",
+        );
+        assert!(result.diagnostics.is_empty(), "{:#?}", result.diagnostics);
+        let unit = result.unit.unwrap();
+        assert!(matches!(
+            unit.declarations()[0].kind(),
+            crate::ast::DeclarationKind::SObject
+        ));
+        assert!(matches!(
+            unit.declarations()[1].kind(),
+            crate::ast::DeclarationKind::Record { components } if components.len() == 2
+        ));
+        assert!(matches!(
+            unit.declarations()[2].kind(),
+            crate::ast::DeclarationKind::SealedResult { variants } if variants.len() == 2
+        ));
+        let crate::ast::ClassMember::Method(method) = &unit.declarations()[3].members()[0] else {
+            panic!("expected service method");
+        };
+        assert!(matches!(
+            method.body().statements()[0].kind(),
+            crate::ast::StatementKind::Let(_)
+        ));
+        assert!(matches!(
+            method.body().statements()[1].kind(),
+            crate::ast::StatementKind::Match { arms, .. } if arms.len() == 2
+        ));
     }
 }

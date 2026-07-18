@@ -1,0 +1,3 @@
+salesforce-api-version = "65.0"
+source-root = "src"
+output-root = ".zenith"

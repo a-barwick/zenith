@@ -127,6 +127,14 @@ to Apex Exec. Query, DML, security, trigger, or helper output outside that
 profile is explicitly skipped as unsupported while golden output and Zenith's
 own validation continue to run.
 
+M4 implements this preflight boundary. Builds whose emitted target surface uses
+records, sealed-result helpers, record construction, safe navigation, null
+coalescing, or match lowering request profile `zenith-m4-safe-values`. The
+pinned backend declares only `zenith-m3-apex-baseline`, so Zenith records
+`unsupported` without launching the backend. M4 constructs that erase entirely
+to the M3 target surface, such as `let`, nullable type annotations, and typed
+IDs, do not by themselves require the M4 target profile.
+
 ### M10: supported test/verification adapter
 
 Formal source-mapped checking, testing, stacks, output, and coverage require a

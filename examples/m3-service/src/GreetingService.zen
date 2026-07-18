@@ -1,7 +1,7 @@
 public class GreetingService {
     private static final String EMPTY_MESSAGE = 'Nobody to greet';
 
-    public String LastGreeting { get; private set; }
+    public String? LastGreeting { get; private set; }
 
     public static String greet(List<String> names) {
         if (names.isEmpty()) {

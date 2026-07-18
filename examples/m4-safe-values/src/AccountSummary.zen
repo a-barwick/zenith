@@ -1,0 +1,4 @@
+public record AccountSummary(
+    Id<Account> accountId,
+    OwnerContact? owner
+);

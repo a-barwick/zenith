@@ -2,7 +2,8 @@
 
 ## Current compiler pipeline
 
-M3 implements the first complete project-to-Apex vertical slice:
+M4 extends the complete project-to-Apex pipeline with safe values and generated
+domain helpers:
 
 ```text
 zenith.toml + .zen sources + optional Apex boundary summary
@@ -14,10 +15,10 @@ Project loader ─► deterministic source discovery and SourceMap identities
 Lexer/parser ───► immutable source-spanned syntax
     │
     ▼
-Checker ────────► cross-file symbols, scopes, types, selected targets, HIR
+Checker ────────► symbols, scopes, null flow, domain types, selected targets, HIR
     │
     ▼
-Lowering ───────► validated Apex IR
+Lowering ───────► match desugaring, generated declarations, validated Apex IR
     │
     ▼
 Emitter ────────► .cls + metadata + per-class maps + build/SFDX manifests
@@ -26,11 +27,12 @@ Emitter ────────► .cls + metadata + per-class maps + build/SFD
 ```
 
 The CLI exposes this pipeline through `check`, `build`, and `emit`; `tokens` and
-`ast` remain stable front-end inspection commands. Schema/query checking,
-governor effects, generated helpers, and runtime test execution have not been
-added speculatively. The parser still contains no name, type, lowering, or
-emission logic, and the emitter consumes validated Apex IR rather than syntax
-or HIR.
+`ast` remain stable front-end inspection commands. Records and sealed results
+produce deterministic helper classes, while SObject domain tags and typed IDs
+erase without runtime wrappers. Schema/query checking, governor effects,
+runtime helpers, and runtime test execution have not been added speculatively.
+The parser still contains no name, type, lowering, or emission logic, and the
+emitter consumes validated Apex IR rather than syntax or HIR.
 
 ## Product and runtime boundary
 
@@ -124,11 +126,13 @@ diagnostic codes, and inspection format are defined in
 
 ### Resolution and typing
 
-M3 resolution selects case-insensitive project and boundary declarations,
-locals, members, and exact-signature methods independent of runtime values.
-Typing records expression types, assignability, and selected call/member/index
-targets in HIR. Lowering does not repeat overload resolution. Future
-nullability, conversions, and custom generic substitutions remain owned here.
+Resolution selects case-insensitive project and boundary declarations, locals,
+members, record components, result variants, and exact-signature methods
+independent of runtime values. M4 typing owns non-null defaults, local null
+refinements, immutable bindings, record construction, typed IDs, and exhaustive
+matches while recording selected call/member/index targets in HIR. Lowering
+does not repeat overload resolution. Future conversions and custom generic
+substitutions remain owned here.
 
 Handwritten Apex declarations enter through explicit boundary declarations or
 a versioned semantic API index produced by a compatible Apex compiler. The
@@ -249,13 +253,13 @@ and its trust boundary is recorded in
 | `lexer` | Recoverable source-to-token conversion |
 | `ast` | Immutable parsed declarations, types, statements, expressions, shared visitor, and stable rendering |
 | `parser` | Precedence, parsed-baseline grammar, localized recovery, and syntax diagnostics |
-| `project` | M3 configuration, deterministic discovery, parsing orchestration, and handwritten boundary loading |
+| `project` | Project configuration, deterministic discovery, parsing orchestration, and handwritten boundary loading |
 | `apex_api` | Small declaration-summary grammar for handwritten Apex signatures |
-| `types` | Canonical checked M3 types and assignability |
-| `check` | Cross-file symbols, scope/name/member/method resolution, type rules, and typed HIR construction |
+| `types` | Canonical checked types, nullability, typed IDs, and assignability |
+| `check` | Cross-file symbols, scope/name/member/method resolution, M4 flow/domain rules, and typed HIR construction |
 | `hir` | Checked declarations, expressions, and selected targets |
-| `lower` | Selection-preserving HIR-to-Apex-IR lowering |
-| `apex_ir` | Target-only declarations and expressions plus pre-emission validation |
+| `lower` | Selection-preserving HIR-to-Apex-IR lowering and exhaustive-match desugaring |
+| `apex_ir` | Target-only declarations, generated record/result shapes, expressions, and pre-emission validation |
 | `emit` | Deterministic Apex, metadata, source maps, manifests, and filesystem output |
 | `compiler` | Public project pipeline orchestration and phase gating |
 | `verify` | Backend-neutral results and the revision-pinned M3 process smoke |

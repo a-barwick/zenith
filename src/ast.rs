@@ -60,6 +60,7 @@ impl Modifier {
 pub struct ClassDeclaration {
     modifiers: Vec<Modifier>,
     name: Identifier,
+    kind: DeclarationKind,
     extends: Option<Type>,
     implements: Vec<Type>,
     members: Vec<ClassMember>,
@@ -78,9 +79,56 @@ impl ClassDeclaration {
         Self {
             modifiers,
             name,
+            kind: DeclarationKind::Class,
             extends,
             implements,
             members,
+            span,
+        }
+    }
+
+    pub(crate) fn new_record(
+        modifiers: Vec<Modifier>,
+        name: Identifier,
+        components: Vec<RecordComponent>,
+        span: Span,
+    ) -> Self {
+        Self {
+            modifiers,
+            name,
+            kind: DeclarationKind::Record { components },
+            extends: None,
+            implements: Vec::new(),
+            members: Vec::new(),
+            span,
+        }
+    }
+
+    pub(crate) fn new_result(
+        modifiers: Vec<Modifier>,
+        name: Identifier,
+        variants: Vec<ResultVariant>,
+        span: Span,
+    ) -> Self {
+        Self {
+            modifiers,
+            name,
+            kind: DeclarationKind::SealedResult { variants },
+            extends: None,
+            implements: Vec::new(),
+            members: Vec::new(),
+            span,
+        }
+    }
+
+    pub(crate) fn new_sobject(modifiers: Vec<Modifier>, name: Identifier, span: Span) -> Self {
+        Self {
+            modifiers,
+            name,
+            kind: DeclarationKind::SObject,
+            extends: None,
+            implements: Vec::new(),
+            members: Vec::new(),
             span,
         }
     }
@@ -93,6 +141,10 @@ impl ClassDeclaration {
         &self.name
     }
 
+    pub const fn kind(&self) -> &DeclarationKind {
+        &self.kind
+    }
+
     pub const fn extends(&self) -> Option<&Type> {
         self.extends.as_ref()
     }
@@ -103,6 +155,68 @@ impl ClassDeclaration {
 
     pub fn members(&self) -> &[ClassMember] {
         &self.members
+    }
+
+    pub const fn span(&self) -> Span {
+        self.span
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DeclarationKind {
+    Class,
+    Record { components: Vec<RecordComponent> },
+    SealedResult { variants: Vec<ResultVariant> },
+    SObject,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecordComponent {
+    ty: Type,
+    name: Identifier,
+    span: Span,
+}
+
+impl RecordComponent {
+    pub(crate) fn new(ty: Type, name: Identifier, span: Span) -> Self {
+        Self { ty, name, span }
+    }
+
+    pub const fn ty(&self) -> &Type {
+        &self.ty
+    }
+
+    pub const fn name(&self) -> &Identifier {
+        &self.name
+    }
+
+    pub const fn span(&self) -> Span {
+        self.span
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResultVariant {
+    name: Identifier,
+    payloads: Vec<RecordComponent>,
+    span: Span,
+}
+
+impl ResultVariant {
+    pub(crate) fn new(name: Identifier, payloads: Vec<RecordComponent>, span: Span) -> Self {
+        Self {
+            name,
+            payloads,
+            span,
+        }
+    }
+
+    pub const fn name(&self) -> &Identifier {
+        &self.name
+    }
+
+    pub fn payloads(&self) -> &[RecordComponent] {
+        &self.payloads
     }
 
     pub const fn span(&self) -> Span {
@@ -397,16 +511,21 @@ impl Parameter {
 pub struct Type {
     name: TypeName,
     arguments: Vec<Type>,
-    nullable: bool,
+    nullable_suffixes: usize,
     span: Span,
 }
 
 impl Type {
-    pub(crate) fn new(name: TypeName, arguments: Vec<Type>, nullable: bool, span: Span) -> Self {
+    pub(crate) fn new(
+        name: TypeName,
+        arguments: Vec<Type>,
+        nullable_suffixes: usize,
+        span: Span,
+    ) -> Self {
         Self {
             name,
             arguments,
-            nullable,
+            nullable_suffixes,
             span,
         }
     }
@@ -420,7 +539,11 @@ impl Type {
     }
 
     pub const fn is_nullable(&self) -> bool {
-        self.nullable
+        self.nullable_suffixes != 0
+    }
+
+    pub const fn nullable_suffixes(&self) -> usize {
+        self.nullable_suffixes
     }
 
     pub const fn span(&self) -> Span {
@@ -439,7 +562,7 @@ impl Type {
             }
             rendered.push('>');
         }
-        if self.nullable {
+        for _ in 0..self.nullable_suffixes {
             rendered.push('?');
         }
         rendered
@@ -523,6 +646,7 @@ impl Statement {
 pub enum StatementKind {
     Block(Block),
     Variable(VariableDeclaration),
+    Let(LetDeclaration),
     Expression(Expression),
     If {
         condition: Expression,
@@ -548,11 +672,84 @@ pub enum StatementKind {
         iterable: Expression,
         body: Box<Statement>,
     },
+    Match {
+        subject: Expression,
+        arms: Vec<MatchArm>,
+    },
     Return(Option<Expression>),
     Throw(Expression),
     Break,
     Continue,
     Empty,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LetDeclaration {
+    name: Identifier,
+    initializer: Expression,
+    span: Span,
+}
+
+impl LetDeclaration {
+    pub(crate) fn new(name: Identifier, initializer: Expression, span: Span) -> Self {
+        Self {
+            name,
+            initializer,
+            span,
+        }
+    }
+
+    pub const fn name(&self) -> &Identifier {
+        &self.name
+    }
+
+    pub const fn initializer(&self) -> &Expression {
+        &self.initializer
+    }
+
+    pub const fn span(&self) -> Span {
+        self.span
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MatchArm {
+    variant: Identifier,
+    bindings: Vec<Identifier>,
+    body: Block,
+    span: Span,
+}
+
+impl MatchArm {
+    pub(crate) fn new(
+        variant: Identifier,
+        bindings: Vec<Identifier>,
+        body: Block,
+        span: Span,
+    ) -> Self {
+        Self {
+            variant,
+            bindings,
+            body,
+            span,
+        }
+    }
+
+    pub const fn variant(&self) -> &Identifier {
+        &self.variant
+    }
+
+    pub fn bindings(&self) -> &[Identifier] {
+        &self.bindings
+    }
+
+    pub const fn body(&self) -> &Block {
+        &self.body
+    }
+
+    pub const fn span(&self) -> Span {
+        self.span
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -748,6 +945,14 @@ pub trait Visitor {
         walk_variable_declaration(self, node);
     }
 
+    fn visit_let_declaration(&mut self, node: &LetDeclaration) {
+        walk_let_declaration(self, node);
+    }
+
+    fn visit_match_arm(&mut self, node: &MatchArm) {
+        walk_match_arm(self, node);
+    }
+
     fn visit_expression(&mut self, node: &Expression) {
         walk_expression(self, node);
     }
@@ -763,14 +968,31 @@ pub fn walk_class_declaration<V: Visitor + ?Sized>(visitor: &mut V, node: &Class
     for modifier in node.modifiers() {
         visitor.visit_modifier(modifier);
     }
-    if let Some(extends) = node.extends() {
-        visitor.visit_type(extends);
-    }
-    for implemented in node.implements() {
-        visitor.visit_type(implemented);
-    }
-    for member in node.members() {
-        visitor.visit_class_member(member);
+    match node.kind() {
+        DeclarationKind::Class => {
+            if let Some(extends) = node.extends() {
+                visitor.visit_type(extends);
+            }
+            for implemented in node.implements() {
+                visitor.visit_type(implemented);
+            }
+            for member in node.members() {
+                visitor.visit_class_member(member);
+            }
+        }
+        DeclarationKind::Record { components } => {
+            for component in components {
+                visitor.visit_type(component.ty());
+            }
+        }
+        DeclarationKind::SealedResult { variants } => {
+            for variant in variants {
+                for payload in variant.payloads() {
+                    visitor.visit_type(payload.ty());
+                }
+            }
+        }
+        DeclarationKind::SObject => {}
     }
 }
 
@@ -853,6 +1075,7 @@ pub fn walk_statement<V: Visitor + ?Sized>(visitor: &mut V, node: &Statement) {
     match node.kind() {
         StatementKind::Block(block) => visitor.visit_block(block),
         StatementKind::Variable(variable) => visitor.visit_variable_declaration(variable),
+        StatementKind::Let(declaration) => visitor.visit_let_declaration(declaration),
         StatementKind::Expression(expression) | StatementKind::Throw(expression) => {
             visitor.visit_expression(expression);
         }
@@ -910,6 +1133,12 @@ pub fn walk_statement<V: Visitor + ?Sized>(visitor: &mut V, node: &Statement) {
             visitor.visit_expression(iterable);
             visitor.visit_statement(body);
         }
+        StatementKind::Match { subject, arms } => {
+            visitor.visit_expression(subject);
+            for arm in arms {
+                visitor.visit_match_arm(arm);
+            }
+        }
         StatementKind::Return(expression) => {
             if let Some(expression) = expression {
                 visitor.visit_expression(expression);
@@ -917,6 +1146,14 @@ pub fn walk_statement<V: Visitor + ?Sized>(visitor: &mut V, node: &Statement) {
         }
         StatementKind::Break | StatementKind::Continue | StatementKind::Empty => {}
     }
+}
+
+pub fn walk_let_declaration<V: Visitor + ?Sized>(visitor: &mut V, node: &LetDeclaration) {
+    visitor.visit_expression(node.initializer());
+}
+
+pub fn walk_match_arm<V: Visitor + ?Sized>(visitor: &mut V, node: &MatchArm) {
+    visitor.visit_block(node.body());
 }
 
 pub fn walk_variable_declaration<V: Visitor + ?Sized>(visitor: &mut V, node: &VariableDeclaration) {
@@ -1030,9 +1267,15 @@ impl AstRenderer<'_> {
     }
 
     fn class_declaration(&mut self, depth: usize, declaration: &ClassDeclaration) {
+        let kind = match declaration.kind() {
+            DeclarationKind::Class => "class",
+            DeclarationKind::Record { .. } => "record",
+            DeclarationKind::SealedResult { .. } => "sealed-result",
+            DeclarationKind::SObject => "sobject",
+        };
         self.node(
             depth,
-            "class",
+            kind,
             &format!(
                 "{}{}",
                 declaration.name().spelling(),
@@ -1040,14 +1283,49 @@ impl AstRenderer<'_> {
             ),
             declaration.span(),
         );
-        if let Some(extends) = declaration.extends() {
-            self.ty(depth + 1, "extends-type", extends);
-        }
-        for implemented in declaration.implements() {
-            self.ty(depth + 1, "implements-type", implemented);
-        }
-        for member in declaration.members() {
-            self.member(depth + 1, member);
+        match declaration.kind() {
+            DeclarationKind::Class => {
+                if let Some(extends) = declaration.extends() {
+                    self.ty(depth + 1, "extends-type", extends);
+                }
+                for implemented in declaration.implements() {
+                    self.ty(depth + 1, "implements-type", implemented);
+                }
+                for member in declaration.members() {
+                    self.member(depth + 1, member);
+                }
+            }
+            DeclarationKind::Record { components } => {
+                for component in components {
+                    self.node(
+                        depth + 1,
+                        "component",
+                        component.name().spelling(),
+                        component.span(),
+                    );
+                    self.ty(depth + 2, "type", component.ty());
+                }
+            }
+            DeclarationKind::SealedResult { variants } => {
+                for variant in variants {
+                    self.node(
+                        depth + 1,
+                        "variant",
+                        variant.name().spelling(),
+                        variant.span(),
+                    );
+                    for payload in variant.payloads() {
+                        self.node(
+                            depth + 2,
+                            "payload",
+                            payload.name().spelling(),
+                            payload.span(),
+                        );
+                        self.ty(depth + 3, "type", payload.ty());
+                    }
+                }
+            }
+            DeclarationKind::SObject => {}
         }
     }
 
@@ -1166,6 +1444,15 @@ impl AstRenderer<'_> {
                     self.expression(depth + 1, initializer);
                 }
             }
+            StatementKind::Let(declaration) => {
+                self.node(
+                    depth,
+                    "let",
+                    declaration.name().spelling(),
+                    statement.span(),
+                );
+                self.expression(depth + 1, declaration.initializer());
+            }
             StatementKind::Expression(expression) => {
                 self.node(depth, "expression-statement", "", statement.span());
                 self.expression(depth + 1, expression);
@@ -1243,6 +1530,17 @@ impl AstRenderer<'_> {
                 self.ty(depth + 1, "type", variable.ty());
                 self.expression(depth + 1, iterable);
                 self.statement(depth + 1, body);
+            }
+            StatementKind::Match { subject, arms } => {
+                self.node(depth, "match", "", statement.span());
+                self.expression(depth + 1, subject);
+                for arm in arms {
+                    self.node(depth + 1, "match-arm", arm.variant().spelling(), arm.span());
+                    for binding in arm.bindings() {
+                        self.node(depth + 2, "binding", binding.spelling(), binding.span());
+                    }
+                    self.block(depth + 2, arm.body());
+                }
             }
             StatementKind::Return(expression) => {
                 self.node(depth, "return", "", statement.span());

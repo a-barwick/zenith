@@ -152,6 +152,7 @@ fn project_command(command: &str, path: &Path, verifier: Option<&Path>) -> ExitC
             }
             if let Some(executable) = verifier {
                 let result = ProcessVerifier::apex_exec(executable, APEX_EXEC_M3_REVISION)
+                    .with_capability_profile(compilation.apex_exec_profile())
                     .verify(&output_root);
                 record_verification(&mut compilation.artifacts, &result);
                 if let Err(diagnostic) = write_artifacts(&output_root, &compilation.artifacts) {

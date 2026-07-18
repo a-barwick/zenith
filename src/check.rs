@@ -18,8 +18,31 @@ struct Symbols {
 struct ClassSymbol {
     name: String,
     span: Span,
+    kind: SymbolKind,
     fields: BTreeMap<String, ValueSymbol>,
     methods: Vec<MethodSymbol>,
+}
+
+#[derive(Clone, Debug)]
+enum SymbolKind {
+    Class,
+    Record { components: Vec<ComponentSymbol> },
+    SealedResult { variants: Vec<VariantSymbol> },
+    SObject,
+}
+
+#[derive(Clone, Debug)]
+struct ComponentSymbol {
+    name: String,
+    ty: Type,
+    span: Span,
+}
+
+#[derive(Clone, Debug)]
+struct VariantSymbol {
+    name: String,
+    payloads: Vec<ComponentSymbol>,
+    span: Span,
 }
 
 #[derive(Clone, Debug)]
@@ -47,8 +70,10 @@ struct MethodSymbol {
 #[derive(Clone, Debug)]
 struct Local {
     name: String,
-    ty: Type,
+    declared_ty: Type,
+    flow_ty: Type,
     parameter: bool,
+    immutable: bool,
     span: Span,
 }
 
@@ -98,7 +123,7 @@ pub fn check(
                 Phase::Project,
                 "project.one-class-per-file",
                 format!(
-                    "`{}` must contain exactly one top-level class",
+                    "`{}` must contain exactly one top-level declaration",
                     unit.relative_path.display()
                 ),
                 Some(unit.syntax.span()),
@@ -113,7 +138,7 @@ pub fn check(
                     Phase::Resolve,
                     "resolve.reserved-generated-name",
                     format!(
-                        "class name `{}` uses the reserved `ZenithGenerated_` prefix",
+                        "declaration name `{}` uses the reserved `ZenithGenerated_` prefix",
                         declaration.name().spelling()
                     ),
                     Some(declaration.name().span()),
@@ -132,7 +157,7 @@ pub fn check(
                     Phase::Project,
                     "project.class-file-mismatch",
                     format!(
-                        "class `{}` must be declared in a matching `.zen` file",
+                        "declaration `{}` must be declared in a matching `.zen` file",
                         declaration.name().spelling()
                     ),
                     Some(declaration.name().span()),
@@ -175,6 +200,16 @@ pub fn check(
                 ClassSymbol {
                     name: declaration.name().spelling().to_owned(),
                     span: declaration.name().span(),
+                    kind: match declaration.kind() {
+                        ast::DeclarationKind::Class => SymbolKind::Class,
+                        ast::DeclarationKind::Record { .. } => {
+                            SymbolKind::Record { components: vec![] }
+                        }
+                        ast::DeclarationKind::SealedResult { .. } => {
+                            SymbolKind::SealedResult { variants: vec![] }
+                        }
+                        ast::DeclarationKind::SObject => SymbolKind::SObject,
+                    },
                     fields: BTreeMap::new(),
                     methods: Vec::new(),
                 },
@@ -184,7 +219,15 @@ pub fn check(
 
     let class_names: BTreeMap<_, _> = classes
         .iter()
-        .map(|(canonical, symbol)| (canonical.clone(), symbol.name.clone()))
+        .map(|(canonical, symbol)| {
+            (
+                canonical.clone(),
+                (
+                    symbol.name.clone(),
+                    matches!(symbol.kind, SymbolKind::SObject),
+                ),
+            )
+        })
         .collect();
     for unit in units {
         let Some(declaration) = unit.syntax.declarations().first() else {
@@ -213,7 +256,11 @@ pub fn check(
         let Some(declaration) = unit.syntax.declarations().first() else {
             continue;
         };
-        if symbols.classes.contains_key(declaration.name().canonical()) {
+        if symbols
+            .classes
+            .get(declaration.name().canonical())
+            .is_some_and(|class| !matches!(class.kind, SymbolKind::SObject))
+        {
             hir_classes.push(check_class(unit, declaration, &symbols, &mut diagnostics));
         }
     }
@@ -225,6 +272,10 @@ pub fn check(
     if diagnostics.is_empty() {
         Ok(hir::Program {
             classes: hir_classes,
+            source_paths: units
+                .iter()
+                .map(|unit| unit.relative_path.to_string_lossy().replace('\\', "/"))
+                .collect(),
         })
     } else {
         Err(diagnostics)
@@ -233,11 +284,148 @@ pub fn check(
 
 fn collect_members(
     declaration: &ast::ClassDeclaration,
-    class_names: &BTreeMap<String, String>,
+    class_names: &BTreeMap<String, (String, bool)>,
     boundary: &ApexBoundary,
     class: &mut ClassSymbol,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    match declaration.kind() {
+        ast::DeclarationKind::Record { components } => {
+            validate_modifiers(
+                declaration.modifiers(),
+                &["public", "global"],
+                "record",
+                diagnostics,
+            );
+            let mut checked = Vec::new();
+            let mut seen = BTreeMap::new();
+            for component in components {
+                reject_reserved_name(component.name(), "record component", diagnostics);
+                if let Some(previous) =
+                    seen.insert(component.name().canonical(), component.name().span())
+                {
+                    diagnostics.push(
+                        Diagnostic::coded_error(
+                            Phase::Resolve,
+                            "resolve.duplicate-record-component",
+                            format!(
+                                "duplicate record component `{}`",
+                                component.name().spelling()
+                            ),
+                            Some(component.name().span()),
+                        )
+                        .with_secondary_label(SourceLabel::new(
+                            previous,
+                            "first component is here",
+                        )),
+                    );
+                }
+                let ty = resolve_type(component.ty(), class_names, boundary, false, diagnostics);
+                let symbol = ComponentSymbol {
+                    name: component.name().spelling().to_owned(),
+                    ty: ty.clone(),
+                    span: component.span(),
+                };
+                class.fields.insert(
+                    component.name().canonical().to_owned(),
+                    ValueSymbol {
+                        name: symbol.name.clone(),
+                        ty,
+                        is_static: false,
+                        is_property: false,
+                        writable: false,
+                        externally_accessible: true,
+                        externally_writable: false,
+                        span: component.name().span(),
+                    },
+                );
+                checked.push(symbol);
+            }
+            class.kind = SymbolKind::Record {
+                components: checked,
+            };
+            return;
+        }
+        ast::DeclarationKind::SealedResult { variants } => {
+            validate_modifiers(
+                declaration.modifiers(),
+                &["public", "global"],
+                "sealed result",
+                diagnostics,
+            );
+            let mut checked_variants = Vec::new();
+            let mut seen_variants = BTreeMap::new();
+            for variant in variants {
+                reject_reserved_name(variant.name(), "result variant", diagnostics);
+                if let Some(previous) =
+                    seen_variants.insert(variant.name().canonical(), variant.name().span())
+                {
+                    diagnostics.push(
+                        Diagnostic::coded_error(
+                            Phase::Resolve,
+                            "resolve.duplicate-result-variant",
+                            format!("duplicate result variant `{}`", variant.name().spelling()),
+                            Some(variant.name().span()),
+                        )
+                        .with_secondary_label(SourceLabel::new(previous, "first variant is here")),
+                    );
+                }
+                let mut payloads = Vec::new();
+                let mut seen_payloads = BTreeMap::new();
+                for payload in variant.payloads() {
+                    reject_reserved_name(payload.name(), "result payload", diagnostics);
+                    if let Some(previous) =
+                        seen_payloads.insert(payload.name().canonical(), payload.name().span())
+                    {
+                        diagnostics.push(
+                            Diagnostic::coded_error(
+                                Phase::Resolve,
+                                "resolve.duplicate-record-component",
+                                format!("duplicate result payload `{}`", payload.name().spelling()),
+                                Some(payload.name().span()),
+                            )
+                            .with_secondary_label(SourceLabel::new(
+                                previous,
+                                "first payload is here",
+                            )),
+                        );
+                    }
+                    payloads.push(ComponentSymbol {
+                        name: payload.name().spelling().to_owned(),
+                        ty: resolve_type(payload.ty(), class_names, boundary, false, diagnostics),
+                        span: payload.span(),
+                    });
+                }
+                class.methods.push(MethodSymbol {
+                    name: variant.name().spelling().to_owned(),
+                    return_type: Type::Class(class.name.clone()),
+                    parameters: payloads.iter().map(|payload| payload.ty.clone()).collect(),
+                    is_static: true,
+                    externally_accessible: true,
+                    span: variant.name().span(),
+                });
+                checked_variants.push(VariantSymbol {
+                    name: variant.name().spelling().to_owned(),
+                    payloads,
+                    span: variant.span(),
+                });
+            }
+            class.kind = SymbolKind::SealedResult {
+                variants: checked_variants,
+            };
+            return;
+        }
+        ast::DeclarationKind::SObject => {
+            validate_modifiers(
+                declaration.modifiers(),
+                &["public", "global"],
+                "SObject domain",
+                diagnostics,
+            );
+            return;
+        }
+        ast::DeclarationKind::Class => {}
+    }
     validate_modifiers(
         declaration.modifiers(),
         &[
@@ -256,13 +444,23 @@ fn collect_members(
     if declaration.extends().is_some() || !declaration.implements().is_empty() {
         diagnostics.push(unsupported(
             declaration.span(),
-            "inheritance and interface implementation are not supported in M3",
+            "inheritance and interface implementation are not supported through M4",
         ));
     }
     for member in declaration.members() {
         match member {
             ast::ClassMember::Field(field) => {
                 let ty = resolve_type(field.ty(), class_names, boundary, false, diagnostics);
+                if field.initializer().is_none() && !matches!(ty, Type::Nullable(_) | Type::Error) {
+                    diagnostics.push(type_error(
+                        "type.uninitialized-non-null",
+                        format!(
+                            "non-null field `{}` requires an initializer",
+                            field.name().spelling()
+                        ),
+                        field.name().span(),
+                    ));
+                }
                 validate_member_value(
                     field.name(),
                     field.modifiers(),
@@ -278,6 +476,16 @@ fn collect_members(
             }
             ast::ClassMember::Property(property) => {
                 let ty = resolve_type(property.ty(), class_names, boundary, false, diagnostics);
+                if !matches!(ty, Type::Nullable(_) | Type::Error) {
+                    diagnostics.push(type_error(
+                        "type.uninitialized-non-null",
+                        format!(
+                            "automatic property `{}` must be nullable until checked accessor initialization is supported",
+                            property.name().spelling()
+                        ),
+                        property.name().span(),
+                    ));
+                }
                 let setter = property
                     .accessors()
                     .iter()
@@ -310,7 +518,7 @@ fn collect_members(
                 {
                     diagnostics.push(unsupported(
                         property.span(),
-                        "M3 automatic properties require a `get` accessor",
+                        "automatic properties through M4 require a `get` accessor",
                     ));
                 }
                 let mut accessors = BTreeMap::new();
@@ -410,7 +618,7 @@ fn collect_members(
             }
             ast::ClassMember::Constructor(constructor) => diagnostics.push(unsupported(
                 constructor.span(),
-                "constructors are not supported in M3",
+                "constructors are not supported through M4",
             )),
         }
     }
@@ -471,7 +679,7 @@ fn validate_member_value(
         diagnostics.push(type_error(
             "type.uninitialized-final-field",
             format!(
-                "final field `{}` requires an initializer because M3 does not support constructors",
+                "final field `{}` requires an initializer because Zenith does not yet support constructors",
                 name.spelling()
             ),
             name.span(),
@@ -581,7 +789,13 @@ fn check_class(
                 );
                 context.push_scope();
                 for parameter in &parameters {
-                    context.declare(&parameter.name, parameter.ty.clone(), true, parameter.span);
+                    context.declare(
+                        &parameter.name,
+                        parameter.ty.clone(),
+                        true,
+                        false,
+                        parameter.span,
+                    );
                 }
                 let body = context.check_block(method.body(), false);
                 context.pop_scope();
@@ -613,6 +827,38 @@ fn check_class(
         members,
         source_path: unit.relative_path.to_string_lossy().replace('\\', "/"),
         span: declaration.span(),
+        kind: match &class.kind {
+            SymbolKind::Class => hir::ClassKind::Class,
+            SymbolKind::Record { components } => hir::ClassKind::Record {
+                components: components
+                    .iter()
+                    .map(|component| hir::Parameter {
+                        name: component.name.clone(),
+                        ty: component.ty.clone(),
+                        span: component.span,
+                    })
+                    .collect(),
+            },
+            SymbolKind::SealedResult { variants } => hir::ClassKind::SealedResult {
+                variants: variants
+                    .iter()
+                    .map(|variant| hir::ResultVariant {
+                        name: variant.name.clone(),
+                        payloads: variant
+                            .payloads
+                            .iter()
+                            .map(|payload| hir::Parameter {
+                                name: payload.name.clone(),
+                                ty: payload.ty.clone(),
+                                span: payload.span,
+                            })
+                            .collect(),
+                        span: variant.span,
+                    })
+                    .collect(),
+            },
+            SymbolKind::SObject => unreachable!("SObject domains do not lower to HIR classes"),
+        },
     }
 }
 
@@ -653,7 +899,21 @@ impl<'a> Context<'a> {
         self.scopes.pop();
     }
 
-    fn declare(&mut self, name: &str, ty: Type, parameter: bool, span: Span) {
+    fn declare(&mut self, name: &str, ty: Type, parameter: bool, immutable: bool, span: Span) {
+        if is_reserved_generated_name(name) {
+            self.diagnostics.push(
+                Diagnostic::coded_error(
+                    Phase::Resolve,
+                    "resolve.reserved-generated-name",
+                    format!(
+                        "{} name `{name}` uses the reserved `ZenithGenerated_` prefix",
+                        if parameter { "parameter" } else { "local" }
+                    ),
+                    Some(span),
+                )
+                .with_primary_label("reserved for compiler-generated declarations and temporaries"),
+            );
+        }
         let canonical = name.to_ascii_lowercase();
         let scope = self
             .scopes
@@ -674,8 +934,10 @@ impl<'a> Context<'a> {
                 canonical,
                 Local {
                     name: name.to_owned(),
-                    ty,
+                    declared_ty: ty.clone(),
+                    flow_ty: ty,
                     parameter,
+                    immutable,
                     span,
                 },
             );
@@ -687,6 +949,95 @@ impl<'a> Context<'a> {
             .iter()
             .rev()
             .find_map(|scope| scope.get(canonical))
+    }
+
+    fn find_local_mut(&mut self, canonical: &str) -> Option<&mut Local> {
+        self.scopes
+            .iter_mut()
+            .rev()
+            .find_map(|scope| scope.get_mut(canonical))
+    }
+
+    fn local_assignment(&self, expression: &ast::Expression) -> Option<(String, bool, Type)> {
+        match expression.kind() {
+            ast::ExpressionKind::Name(name) => self.find_local(name.canonical()).map(|local| {
+                (
+                    name.canonical().to_owned(),
+                    local.immutable,
+                    local.declared_ty.clone(),
+                )
+            }),
+            ast::ExpressionKind::Parenthesized(inner) => self.local_assignment(inner),
+            _ => None,
+        }
+    }
+
+    fn reject_immutable_increment(&mut self, operand: &ast::Expression, operator: &str) -> bool {
+        if self
+            .local_assignment(operand)
+            .is_some_and(|(_, immutable, _)| immutable)
+        {
+            self.diagnostics.push(type_error(
+                "type.immutable-assignment",
+                format!("an immutable `let` binding cannot be modified with `{operator}`"),
+                operand.span(),
+            ));
+            true
+        } else {
+            false
+        }
+    }
+
+    fn apply_null_fact(&mut self, fact: &NullFact) {
+        let Some(local) = self.find_local_mut(&fact.canonical) else {
+            return;
+        };
+        if let Type::Nullable(inner) = &local.declared_ty {
+            local.flow_ty = if fact.non_null {
+                inner.as_ref().clone()
+            } else {
+                local.declared_ty.clone()
+            };
+        }
+    }
+
+    fn update_local_after_assignment(&mut self, canonical: &str, value_type: &Type) {
+        let Some(local) = self.find_local_mut(canonical) else {
+            return;
+        };
+        if matches!(local.declared_ty, Type::Nullable(_)) {
+            local.flow_ty = if value_type == &Type::Null {
+                local.declared_ty.clone()
+            } else if local.declared_ty.accepts(value_type) {
+                value_type.clone()
+            } else {
+                local.declared_ty.clone()
+            };
+        }
+    }
+
+    fn resolve_value_type(&mut self, syntax: &ast::Type) -> Type {
+        let classes: BTreeMap<_, _> = self
+            .symbols
+            .classes
+            .iter()
+            .map(|(canonical, class)| {
+                (
+                    canonical.clone(),
+                    (
+                        class.name.clone(),
+                        matches!(class.kind, SymbolKind::SObject),
+                    ),
+                )
+            })
+            .collect();
+        resolve_type(
+            syntax,
+            &classes,
+            &self.symbols.external,
+            false,
+            self.diagnostics,
+        )
     }
 
     fn check_block(&mut self, block: &ast::Block, create_scope: bool) -> hir::Block {
@@ -713,12 +1064,17 @@ impl<'a> Context<'a> {
                 hir::StatementKind::Block(self.check_block(block, true))
             }
             ast::StatementKind::Variable(variable) => {
-                let ty = resolve_type_quiet(variable.ty(), self.symbols);
-                if ty == Type::Void {
+                let ty = self.resolve_value_type(variable.ty());
+                if variable.initializer().is_none()
+                    && !matches!(ty, Type::Nullable(_) | Type::Error)
+                {
                     self.diagnostics.push(type_error(
-                        "type.void-value",
-                        "`void` cannot be used as a local type",
-                        variable.ty().span(),
+                        "type.uninitialized-non-null",
+                        format!(
+                            "non-null local `{}` requires an initializer",
+                            variable.name().spelling()
+                        ),
+                        variable.name().span(),
                     ));
                 }
                 let initializer = variable.initializer().map(|expression| {
@@ -730,12 +1086,42 @@ impl<'a> Context<'a> {
                     variable.name().spelling(),
                     ty.clone(),
                     false,
+                    false,
                     variable.name().span(),
                 );
                 hir::StatementKind::Variable {
                     ty,
                     name: variable.name().spelling().to_owned(),
                     initializer,
+                    immutable: false,
+                }
+            }
+            ast::StatementKind::Let(declaration) => {
+                let initializer = self.check_expression(declaration.initializer());
+                let ty = initializer.ty.clone();
+                if matches!(
+                    ty,
+                    Type::Void | Type::Null | Type::SObjectDomain(_) | Type::Error
+                ) || is_class_reference(&initializer)
+                {
+                    self.diagnostics.push(type_error(
+                        "type.cannot-infer-let",
+                        format!("cannot infer an immutable binding from `{ty}`"),
+                        declaration.initializer().span(),
+                    ));
+                }
+                self.declare(
+                    declaration.name().spelling(),
+                    ty.clone(),
+                    false,
+                    true,
+                    declaration.name().span(),
+                );
+                hir::StatementKind::Variable {
+                    ty,
+                    name: declaration.name().spelling().to_owned(),
+                    initializer: Some(initializer),
+                    immutable: true,
                 }
             }
             ast::StatementKind::Expression(expression) => {
@@ -746,22 +1132,61 @@ impl<'a> Context<'a> {
                 then_branch,
                 else_branch,
             } => {
+                let true_facts = null_facts(condition, true);
+                let false_facts = null_facts(condition, false);
                 let condition = self.check_expression(condition);
                 require_boolean(&condition, self.diagnostics);
+                let original_scopes = self.scopes.clone();
+                for fact in &true_facts {
+                    self.apply_null_fact(fact);
+                }
+                let then_branch = Box::new(self.check_scoped_statement(then_branch));
+                self.scopes = original_scopes.clone();
+                let else_branch = if let Some(branch) = else_branch.as_deref() {
+                    for fact in &false_facts {
+                        self.apply_null_fact(fact);
+                    }
+                    let checked = Some(Box::new(self.check_scoped_statement(branch)));
+                    self.scopes = original_scopes;
+                    let then_returns = statement_guarantees_return(&then_branch);
+                    let else_returns = checked.as_deref().is_some_and(statement_guarantees_return);
+                    if then_returns && !else_returns {
+                        for fact in &false_facts {
+                            self.apply_null_fact(fact);
+                        }
+                    } else if else_returns && !then_returns {
+                        for fact in &true_facts {
+                            self.apply_null_fact(fact);
+                        }
+                    }
+                    checked
+                } else {
+                    self.scopes = original_scopes;
+                    if statement_guarantees_return(&then_branch) {
+                        for fact in &false_facts {
+                            self.apply_null_fact(fact);
+                        }
+                    }
+                    None
+                };
                 hir::StatementKind::If {
                     condition,
-                    then_branch: Box::new(self.check_scoped_statement(then_branch)),
-                    else_branch: else_branch
-                        .as_deref()
-                        .map(|branch| Box::new(self.check_scoped_statement(branch))),
+                    then_branch,
+                    else_branch,
                 }
             }
             ast::StatementKind::While { condition, body } => {
+                let facts = null_facts(condition, true);
                 let condition = self.check_expression(condition);
                 require_boolean(&condition, self.diagnostics);
+                let original_scopes = self.scopes.clone();
+                for fact in &facts {
+                    self.apply_null_fact(fact);
+                }
                 self.loop_depth += 1;
                 let body = Box::new(self.check_scoped_statement(body));
                 self.loop_depth -= 1;
+                self.scopes = original_scopes;
                 hir::StatementKind::While { condition, body }
             }
             ast::StatementKind::For {
@@ -773,7 +1198,19 @@ impl<'a> Context<'a> {
                 self.push_scope();
                 let initializer = initializer.as_ref().map(|initializer| match initializer {
                     ast::ForInitializer::Variable(variable) => {
-                        let ty = resolve_type_quiet(variable.ty(), self.symbols);
+                        let ty = self.resolve_value_type(variable.ty());
+                        if variable.initializer().is_none()
+                            && !matches!(ty, Type::Nullable(_) | Type::Error)
+                        {
+                            self.diagnostics.push(type_error(
+                                "type.uninitialized-non-null",
+                                format!(
+                                    "non-null loop local `{}` requires an initializer",
+                                    variable.name().spelling()
+                                ),
+                                variable.name().span(),
+                            ));
+                        }
                         let initializer = variable.initializer().map(|expression| {
                             let checked = self.check_expression(expression);
                             require_assignable(&ty, &checked, expression.span(), self.diagnostics);
@@ -782,6 +1219,7 @@ impl<'a> Context<'a> {
                         self.declare(
                             variable.name().spelling(),
                             ty.clone(),
+                            false,
                             false,
                             variable.name().span(),
                         );
@@ -831,13 +1269,13 @@ impl<'a> Context<'a> {
                     _ => {
                         self.diagnostics.push(type_error(
                             "type.not-iterable",
-                            format!("type `{}` is not iterable in M3", iterable.ty),
+                            format!("type `{}` is not iterable through M4", iterable.ty),
                             iterable.span,
                         ));
                         Type::Error
                     }
                 };
-                let variable_type = resolve_type_quiet(variable.ty(), self.symbols);
+                let variable_type = self.resolve_value_type(variable.ty());
                 if !variable_type.accepts(&element) {
                     self.diagnostics.push(type_error(
                         "type.incompatible-value",
@@ -849,6 +1287,7 @@ impl<'a> Context<'a> {
                 self.declare(
                     variable.name().spelling(),
                     variable_type.clone(),
+                    false,
                     false,
                     variable.name().span(),
                 );
@@ -862,6 +1301,9 @@ impl<'a> Context<'a> {
                     iterable,
                     body,
                 }
+            }
+            ast::StatementKind::Match { subject, arms } => {
+                self.check_match(subject, arms, statement.span())
             }
             ast::StatementKind::Return(expression) => {
                 let expression = expression.as_ref().map(|expression| {
@@ -913,14 +1355,14 @@ impl<'a> Context<'a> {
             ast::StatementKind::DoWhile { .. } => {
                 self.diagnostics.push(unsupported(
                     statement.span(),
-                    "`do while` is parsed but not supported in M3",
+                    "`do while` is parsed but not supported through M4",
                 ));
                 hir::StatementKind::Empty
             }
             ast::StatementKind::Throw(_) => {
                 self.diagnostics.push(unsupported(
                     statement.span(),
-                    "`throw` is parsed but not supported in M3",
+                    "`throw` is parsed but not supported through M4",
                 ));
                 hir::StatementKind::Empty
             }
@@ -928,6 +1370,152 @@ impl<'a> Context<'a> {
         hir::Statement {
             kind,
             span: statement.span(),
+        }
+    }
+
+    fn check_match(
+        &mut self,
+        subject: &ast::Expression,
+        arms: &[ast::MatchArm],
+        span: Span,
+    ) -> hir::StatementKind {
+        let subject = self.check_expression(subject);
+        let result_name = match &subject.ty {
+            Type::Class(name) => name.clone(),
+            Type::Nullable(inner) if matches!(inner.as_ref(), Type::Class(_)) => {
+                self.diagnostics.push(type_error(
+                    "type.invalid-match-subject",
+                    "a nullable sealed result must be narrowed before matching",
+                    subject.span,
+                ));
+                match inner.as_ref() {
+                    Type::Class(name) => name.clone(),
+                    _ => unreachable!(),
+                }
+            }
+            _ => {
+                self.diagnostics.push(type_error(
+                    "type.invalid-match-subject",
+                    format!(
+                        "match requires a sealed result subject, found `{}`",
+                        subject.ty
+                    ),
+                    subject.span,
+                ));
+                String::new()
+            }
+        };
+        let variants = self
+            .symbols
+            .classes
+            .get(&result_name.to_ascii_lowercase())
+            .and_then(|class| match &class.kind {
+                SymbolKind::SealedResult { variants } => Some(variants.clone()),
+                _ => None,
+            });
+        let Some(variants) = variants else {
+            if !result_name.is_empty() {
+                self.diagnostics.push(type_error(
+                    "type.invalid-match-subject",
+                    format!("type `{result_name}` is not a sealed result"),
+                    subject.span,
+                ));
+            }
+            return hir::StatementKind::Match {
+                subject,
+                result_name,
+                arms: Vec::new(),
+            };
+        };
+
+        let mut seen = BTreeMap::new();
+        let mut checked_arms = Vec::new();
+        for arm in arms {
+            let canonical = arm.variant().canonical();
+            if let Some(previous) = seen.insert(canonical.to_owned(), arm.variant().span()) {
+                self.diagnostics.push(
+                    type_error(
+                        "type.duplicate-match-arm",
+                        format!("duplicate match arm `{}`", arm.variant().spelling()),
+                        arm.variant().span(),
+                    )
+                    .with_secondary_label(SourceLabel::new(previous, "first arm is here")),
+                );
+            }
+            let Some((variant_index, variant)) = variants
+                .iter()
+                .enumerate()
+                .find(|(_, variant)| variant.name.eq_ignore_ascii_case(arm.variant().spelling()))
+            else {
+                self.diagnostics.push(Diagnostic::coded_error(
+                    Phase::Resolve,
+                    "resolve.unknown-result-variant",
+                    format!(
+                        "`{}` has no variant `{}`",
+                        result_name,
+                        arm.variant().spelling()
+                    ),
+                    Some(arm.variant().span()),
+                ));
+                continue;
+            };
+            if arm.bindings().len() != variant.payloads.len() {
+                self.diagnostics.push(type_error(
+                    "type.match-binding-count",
+                    format!(
+                        "variant `{}` requires {} bindings, found {}",
+                        variant.name,
+                        variant.payloads.len(),
+                        arm.bindings().len()
+                    ),
+                    arm.span(),
+                ));
+            }
+            self.push_scope();
+            let mut bindings = Vec::new();
+            for (binding, payload) in arm.bindings().iter().zip(&variant.payloads) {
+                self.declare(
+                    binding.spelling(),
+                    payload.ty.clone(),
+                    false,
+                    true,
+                    binding.span(),
+                );
+                bindings.push(hir::Parameter {
+                    name: binding.spelling().to_owned(),
+                    ty: payload.ty.clone(),
+                    span: binding.span(),
+                });
+            }
+            let body = self.check_block(arm.body(), false);
+            self.pop_scope();
+            checked_arms.push(hir::MatchArm {
+                variant_name: variant.name.clone(),
+                variant_index,
+                bindings,
+                body,
+                span: arm.span(),
+            });
+        }
+        let missing: Vec<_> = variants
+            .iter()
+            .filter(|variant| !seen.contains_key(&variant.name.to_ascii_lowercase()))
+            .map(|variant| variant.name.clone())
+            .collect();
+        if !missing.is_empty() {
+            self.diagnostics.push(
+                type_error(
+                    "type.non-exhaustive-match",
+                    format!("match does not cover {}", missing.join(", ")),
+                    span,
+                )
+                .with_note("every sealed result variant must appear exactly once"),
+            );
+        }
+        hir::StatementKind::Match {
+            subject,
+            result_name,
+            arms: checked_arms,
         }
     }
 
@@ -1005,14 +1593,8 @@ impl<'a> Context<'a> {
                 member,
                 safe,
             } => {
-                if *safe {
-                    self.diagnostics.push(unsupported(
-                        expression.span(),
-                        "safe navigation is reserved for M4",
-                    ));
-                }
                 let object = self.check_expression(object);
-                self.check_member(object, member, expression.span())
+                self.check_member(object, member, *safe, expression.span())
             }
             ast::ExpressionKind::Call { callee, arguments } => {
                 self.check_call(callee, arguments, expression.span())
@@ -1046,6 +1628,8 @@ impl<'a> Context<'a> {
                 )
             }
             ast::ExpressionKind::Unary { operator, operand } => {
+                let immutable_increment = matches!(operator.spelling(), "++" | "--")
+                    && self.reject_immutable_increment(operand, operator.spelling());
                 let operand = if operator.spelling() == "-" {
                     if let ast::ExpressionKind::Integer(value) = operand.kind() {
                         if value
@@ -1090,11 +1674,12 @@ impl<'a> Context<'a> {
                         }
                         operand.ty.clone()
                     }
+                    "++" | "--" if immutable_increment => Type::Error,
                     _ => {
                         self.diagnostics.push(unsupported(
                             expression.span(),
                             format!(
-                                "unary operator `{}` is not supported in M3",
+                                "unary operator `{}` is not supported through M4",
                                 operator.spelling()
                             ),
                         ));
@@ -1117,7 +1702,30 @@ impl<'a> Context<'a> {
                 right,
             } => {
                 let left = self.check_expression(left);
+                let original_scopes = self.scopes.clone();
+                if operator.spelling() == "&&" {
+                    for fact in null_facts(
+                        match expression.kind() {
+                            ast::ExpressionKind::Binary { left, .. } => left,
+                            _ => unreachable!(),
+                        },
+                        true,
+                    ) {
+                        self.apply_null_fact(&fact);
+                    }
+                } else if operator.spelling() == "||" {
+                    for fact in null_facts(
+                        match expression.kind() {
+                            ast::ExpressionKind::Binary { left, .. } => left,
+                            _ => unreachable!(),
+                        },
+                        false,
+                    ) {
+                        self.apply_null_fact(&fact);
+                    }
+                }
                 let right = self.check_expression(right);
+                self.scopes = original_scopes;
                 let ty = check_binary(&left, operator.spelling(), &right, self.diagnostics);
                 self.expression(
                     hir::ExpressionKind::Binary {
@@ -1135,11 +1743,38 @@ impl<'a> Context<'a> {
                 then_expression,
                 else_expression,
             } => {
+                let true_facts = null_facts(condition, true);
+                let false_facts = null_facts(condition, false);
                 let condition = self.check_expression(condition);
                 require_boolean(&condition, self.diagnostics);
+                let original_scopes = self.scopes.clone();
+                for fact in &true_facts {
+                    self.apply_null_fact(fact);
+                }
                 let then_expression = self.check_expression(then_expression);
+                self.scopes = original_scopes.clone();
+                for fact in &false_facts {
+                    self.apply_null_fact(fact);
+                }
                 let else_expression = self.check_expression(else_expression);
-                let ty = if then_expression.ty.accepts(&else_expression.ty) {
+                self.scopes = original_scopes;
+                let ty = if then_expression.ty == Type::Null && else_expression.ty == Type::Null {
+                    Type::Null
+                } else if then_expression.ty == Type::Null
+                    && !matches!(
+                        else_expression.ty,
+                        Type::Void | Type::Error | Type::SObjectDomain(_)
+                    )
+                {
+                    else_expression.ty.clone().into_nullable()
+                } else if else_expression.ty == Type::Null
+                    && !matches!(
+                        then_expression.ty,
+                        Type::Void | Type::Error | Type::SObjectDomain(_)
+                    )
+                {
+                    then_expression.ty.clone().into_nullable()
+                } else if then_expression.ty.accepts(&else_expression.ty) {
                     then_expression.ty.clone()
                 } else if else_expression.ty.accepts(&then_expression.ty) {
                     else_expression.ty.clone()
@@ -1170,9 +1805,19 @@ impl<'a> Context<'a> {
                 operator,
                 value,
             } => {
+                let local_assignment = self.local_assignment(target);
                 let target = self.check_expression(target);
                 let value = self.check_expression(value);
-                if !target.assignable {
+                if local_assignment
+                    .as_ref()
+                    .is_some_and(|(_, immutable, _)| *immutable)
+                {
+                    self.diagnostics.push(type_error(
+                        "type.immutable-assignment",
+                        "an immutable `let` binding cannot be reassigned",
+                        target.span,
+                    ));
+                } else if !target.assignable {
                     self.diagnostics.push(type_error(
                         "type.invalid-assignment-target",
                         "assignment target is not writable",
@@ -1180,7 +1825,13 @@ impl<'a> Context<'a> {
                     ));
                 }
                 if operator.spelling() == "=" {
-                    require_assignable(&target.ty, &value, value.span, self.diagnostics);
+                    let expected = local_assignment
+                        .as_ref()
+                        .map_or(&target.ty, |(_, _, declared)| declared);
+                    require_assignable(expected, &value, value.span, self.diagnostics);
+                    if let Some((canonical, false, _)) = &local_assignment {
+                        self.update_local_after_assignment(canonical, &value.ty);
+                    }
                 } else if !matches!(operator.spelling(), "+=" | "-=" | "*=" | "/=")
                     || check_binary(&target, &operator.spelling()[..1], &value, self.diagnostics)
                         == Type::Error
@@ -1205,12 +1856,38 @@ impl<'a> Context<'a> {
                     false,
                 )
             }
-            ast::ExpressionKind::New { .. }
-            | ast::ExpressionKind::Super
-            | ast::ExpressionKind::Postfix { .. } => {
+            ast::ExpressionKind::New { ty, arguments } => {
+                self.check_new(ty, arguments, expression.span())
+            }
+            ast::ExpressionKind::Postfix { operand, operator } => {
+                if self.reject_immutable_increment(operand, operator.spelling()) {
+                    let operand = self.check_expression(operand);
+                    self.expression(
+                        hir::ExpressionKind::Unary {
+                            operator: operator.spelling().to_owned(),
+                            operand: Box::new(operand),
+                        },
+                        Type::Error,
+                        expression.span(),
+                        false,
+                    )
+                } else {
+                    self.diagnostics.push(unsupported(
+                        expression.span(),
+                        "postfix expressions are parsed but not supported in M4",
+                    ));
+                    self.expression(
+                        hir::ExpressionKind::Null,
+                        Type::Error,
+                        expression.span(),
+                        false,
+                    )
+                }
+            }
+            ast::ExpressionKind::Super => {
                 self.diagnostics.push(unsupported(
                     expression.span(),
-                    "this expression form is parsed but not supported in M3",
+                    "`super` expressions are parsed but not supported in M4",
                 ));
                 self.expression(
                     hir::ExpressionKind::Null,
@@ -1220,6 +1897,66 @@ impl<'a> Context<'a> {
                 )
             }
         }
+    }
+
+    fn check_new(
+        &mut self,
+        syntax: &ast::Type,
+        arguments: &[ast::Expression],
+        span: Span,
+    ) -> hir::Expression {
+        let ty = self.resolve_value_type(syntax);
+        let arguments: Vec<_> = arguments
+            .iter()
+            .map(|argument| self.check_expression(argument))
+            .collect();
+        let (name, components) = match &ty {
+            Type::Class(name) => {
+                let components = self
+                    .symbols
+                    .classes
+                    .get(&name.to_ascii_lowercase())
+                    .and_then(|class| match &class.kind {
+                        SymbolKind::Record { components } => Some(components.clone()),
+                        _ => None,
+                    });
+                (name.clone(), components)
+            }
+            _ => (syntax.display_name(), None),
+        };
+        let Some(components) = components else {
+            self.diagnostics.push(type_error(
+                "type.not-constructible",
+                format!("type `{}` is not an M4 record", syntax.display_name()),
+                syntax.span(),
+            ));
+            return self.expression(
+                hir::ExpressionKind::New { name, arguments },
+                Type::Error,
+                span,
+                false,
+            );
+        };
+        if components.len() != arguments.len() {
+            self.diagnostics.push(type_error(
+                "type.not-constructible",
+                format!(
+                    "record `{name}` requires {} arguments, found {}",
+                    components.len(),
+                    arguments.len()
+                ),
+                span,
+            ));
+        }
+        for (component, argument) in components.iter().zip(&arguments) {
+            require_assignable(&component.ty, argument, argument.span, self.diagnostics);
+        }
+        self.expression(
+            hir::ExpressionKind::New { name, arguments },
+            ty,
+            span,
+            false,
+        )
     }
 
     fn check_name(&mut self, name: &crate::token::Identifier, span: Span) -> hir::Expression {
@@ -1233,9 +1970,9 @@ impl<'a> Context<'a> {
                         hir::ValueTarget::Local
                     },
                 },
-                local.ty.clone(),
+                local.flow_ty.clone(),
                 span,
-                true,
+                !local.immutable,
             );
         }
         if let Some(field) = self.class.fields.get(name.canonical()) {
@@ -1275,7 +2012,11 @@ impl<'a> Context<'a> {
                     spelling: class.name.clone(),
                     target: hir::ValueTarget::Class { external: false },
                 },
-                Type::Class(class.name.clone()),
+                if matches!(class.kind, SymbolKind::SObject) {
+                    Type::SObjectDomain(class.name.clone())
+                } else {
+                    Type::Class(class.name.clone())
+                },
                 span,
                 false,
             );
@@ -1315,9 +2056,35 @@ impl<'a> Context<'a> {
         &mut self,
         object: hir::Expression,
         member: &crate::token::Identifier,
+        safe: bool,
         span: Span,
     ) -> hir::Expression {
-        let class_name = object.ty.canonical_class_name().map(str::to_owned);
+        let lookup_ty = if let Type::Nullable(inner) = &object.ty {
+            if !safe {
+                self.diagnostics.push(type_error(
+                    "type.nullable-dereference",
+                    format!(
+                        "nullable value `{}` must be narrowed or accessed with `?.`",
+                        object.ty
+                    ),
+                    object.span,
+                ));
+            }
+            inner.as_ref()
+        } else {
+            if safe && object.ty != Type::Error {
+                self.diagnostics.push(type_error(
+                    "type.invalid-safe-navigation",
+                    format!(
+                        "safe navigation requires a nullable receiver, found `{}`",
+                        object.ty
+                    ),
+                    object.span,
+                ));
+            }
+            &object.ty
+        };
+        let class_name = lookup_ty.canonical_class_name().map(str::to_owned);
         if let Some(class_name) = class_name {
             let canonical = class_name.to_ascii_lowercase();
             if let Some(class) = self.symbols.classes.get(&canonical) {
@@ -1372,10 +2139,11 @@ impl<'a> Context<'a> {
                             object: Box::new(object),
                             name: field.name.clone(),
                             target,
+                            safe,
                         },
-                        ty,
+                        if safe { ty.into_nullable() } else { ty },
                         span,
-                        field.writable && (same_class || field.externally_writable),
+                        !safe && field.writable && (same_class || field.externally_writable),
                     );
                 }
             }
@@ -1398,6 +2166,7 @@ impl<'a> Context<'a> {
                 object: Box::new(object),
                 name: member.spelling().to_owned(),
                 target: hir::ValueTarget::Local,
+                safe,
             },
             Type::Error,
             span,
@@ -1415,7 +2184,7 @@ impl<'a> Context<'a> {
             .iter()
             .map(|argument| self.check_expression(argument))
             .collect();
-        let (receiver, name, candidates) = match callee.kind() {
+        let (receiver, name, candidates, safe) = match callee.kind() {
             ast::ExpressionKind::Name(name) => (
                 None,
                 name.spelling().to_owned(),
@@ -1425,21 +2194,48 @@ impl<'a> Context<'a> {
                     .filter(|method| method.name.eq_ignore_ascii_case(name.spelling()))
                     .map(|method| Candidate::Project(self.class.name.clone(), method))
                     .collect(),
+                false,
             ),
             ast::ExpressionKind::Member {
                 object,
                 member,
                 safe,
             } => {
-                if *safe {
-                    self.diagnostics.push(unsupported(
-                        callee.span(),
-                        "safe navigation is reserved for M4",
-                    ));
-                }
                 let receiver = self.check_expression(object);
-                let candidates = self.call_candidates(&receiver, member.canonical());
-                (Some(receiver), member.spelling().to_owned(), candidates)
+                let lookup_receiver = if let Type::Nullable(inner) = &receiver.ty {
+                    if !*safe {
+                        self.diagnostics.push(type_error(
+                            "type.nullable-dereference",
+                            format!(
+                                "nullable value `{}` must be narrowed or called with `?.`",
+                                receiver.ty
+                            ),
+                            receiver.span,
+                        ));
+                    }
+                    let mut lookup = receiver.clone();
+                    lookup.ty = inner.as_ref().clone();
+                    lookup
+                } else {
+                    if *safe && receiver.ty != Type::Error {
+                        self.diagnostics.push(type_error(
+                            "type.invalid-safe-navigation",
+                            format!(
+                                "safe navigation requires a nullable receiver, found `{}`",
+                                receiver.ty
+                            ),
+                            receiver.span,
+                        ));
+                    }
+                    receiver.clone()
+                };
+                let candidates = self.call_candidates(&lookup_receiver, member.canonical());
+                (
+                    Some(receiver),
+                    member.spelling().to_owned(),
+                    candidates,
+                    *safe,
+                )
             }
             _ => {
                 self.diagnostics.push(type_error(
@@ -1456,6 +2252,7 @@ impl<'a> Context<'a> {
                             collection: "<error>".into(),
                             parameter_types: Vec::new(),
                         },
+                        safe: false,
                     },
                     Type::Error,
                     span,
@@ -1509,6 +2306,7 @@ impl<'a> Context<'a> {
                         collection: "<error>".into(),
                         parameter_types: Vec::new(),
                     },
+                    safe,
                 },
                 Type::Error,
                 span,
@@ -1575,8 +2373,13 @@ impl<'a> Context<'a> {
                 name: selected_name,
                 arguments,
                 target,
+                safe,
             },
-            return_type,
+            if safe && return_type != Type::Void {
+                return_type.into_nullable()
+            } else {
+                return_type
+            },
             span,
             false,
         )
@@ -1637,11 +2440,15 @@ impl<'a> Context<'a> {
                 &[
                     ("size", vec![], Type::Integer),
                     ("isempty", vec![], Type::Boolean),
-                    ("get", vec![key.as_ref().clone()], value.as_ref().clone()),
+                    (
+                        "get",
+                        vec![key.as_ref().clone()],
+                        value.as_ref().clone().into_nullable(),
+                    ),
                     (
                         "put",
                         vec![key.as_ref().clone(), value.as_ref().clone()],
-                        value.as_ref().clone(),
+                        value.as_ref().clone().into_nullable(),
                     ),
                     ("containskey", vec![key.as_ref().clone()], Type::Boolean),
                 ],
@@ -1697,7 +2504,14 @@ impl Candidate<'_> {
     fn return_type(&self) -> Type {
         match self {
             Self::Project(_, method) => method.return_type.clone(),
-            Self::External(_, method) => method.return_type.clone(),
+            Self::External(_, method) => {
+                let ty = method.return_type.clone();
+                if ty.is_reference_like() && ty != Type::Object {
+                    ty.into_nullable()
+                } else {
+                    ty
+                }
+            }
             Self::Collection { return_type, .. } => return_type.clone(),
         }
     }
@@ -1767,24 +2581,48 @@ fn collection_candidates<'a>(
 
 fn resolve_type(
     syntax: &ast::Type,
-    classes: &BTreeMap<String, String>,
+    classes: &BTreeMap<String, (String, bool)>,
     boundary: &ApexBoundary,
     allow_void: bool,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Type {
-    if syntax.is_nullable() {
-        diagnostics.push(unsupported(
-            syntax.span(),
-            "nullable types are reserved for M4",
-        ));
-    }
     let canonical = syntax.name().canonical();
+    if canonical == "id" {
+        let base = match syntax.arguments() {
+            [] => Type::Id(None),
+            [domain] if domain.arguments().is_empty() && !domain.is_nullable() => {
+                match classes.get(domain.name().canonical()) {
+                    Some((name, true)) => Type::Id(Some(name.clone())),
+                    _ => {
+                        diagnostics.push(type_error(
+                            "type.invalid-id-domain",
+                            format!(
+                                "`{}` is not a declared SObject domain",
+                                domain.display_name()
+                            ),
+                            domain.span(),
+                        ));
+                        Type::Error
+                    }
+                }
+            }
+            _ => {
+                diagnostics.push(type_error(
+                    "type.invalid-id-domain",
+                    "`Id<T>` requires exactly one non-null SObject domain argument",
+                    syntax.span(),
+                ));
+                Type::Error
+            }
+        };
+        return apply_nullability(base, syntax, diagnostics);
+    }
     let arguments: Vec<_> = syntax
         .arguments()
         .iter()
         .map(|argument| resolve_type(argument, classes, boundary, false, diagnostics))
         .collect();
-    match canonical {
+    let base = match canonical {
         "void" if arguments.is_empty() && allow_void => Type::Void,
         "void" if arguments.is_empty() => {
             diagnostics.push(type_error(
@@ -1819,8 +2657,19 @@ fn resolve_type(
             Type::Error
         }
         _ if arguments.is_empty() => {
-            if let Some(name) = classes.get(canonical) {
-                Type::Class(name.clone())
+            if let Some((name, is_sobject)) = classes.get(canonical) {
+                if *is_sobject {
+                    diagnostics.push(type_error(
+                        "type.invalid-id-domain",
+                        format!(
+                            "SObject domain `{name}` is a type argument for `Id<{name}>`, not a value type"
+                        ),
+                        syntax.span(),
+                    ));
+                    Type::Error
+                } else {
+                    Type::Class(name.clone())
+                }
             } else if let Some(class) = boundary.classes.get(canonical) {
                 Type::ExternalClass(class.name.clone())
             } else {
@@ -1836,18 +2685,27 @@ fn resolve_type(
         _ => {
             diagnostics.push(unsupported(
                 syntax.span(),
-                "user-defined generic types are not supported in M3",
+                "user-defined generic types are not supported through M4",
             ));
             Type::Error
         }
-    }
+    };
+    apply_nullability(base, syntax, diagnostics)
 }
 
 fn resolve_type_quiet(syntax: &ast::Type, symbols: &Symbols) -> Type {
     let classes: BTreeMap<_, _> = symbols
         .classes
         .iter()
-        .map(|(canonical, class)| (canonical.clone(), class.name.clone()))
+        .map(|(canonical, class)| {
+            (
+                canonical.clone(),
+                (
+                    class.name.clone(),
+                    matches!(class.kind, SymbolKind::SObject),
+                ),
+            )
+        })
         .collect();
     resolve_type(
         syntax,
@@ -1856,6 +2714,24 @@ fn resolve_type_quiet(syntax: &ast::Type, symbols: &Symbols) -> Type {
         syntax.name().canonical() == "void",
         &mut Vec::new(),
     )
+}
+
+fn apply_nullability(base: Type, syntax: &ast::Type, diagnostics: &mut Vec<Diagnostic>) -> Type {
+    if !syntax.is_nullable() {
+        return base;
+    }
+    if syntax.nullable_suffixes() > 1
+        || matches!(base, Type::Void | Type::SObjectDomain(_) | Type::Error)
+    {
+        diagnostics.push(type_error(
+            "type.invalid-nullable-type",
+            format!("type `{}` cannot be nullable", base.display_name()),
+            syntax.span(),
+        ));
+        Type::Error
+    } else {
+        base.into_nullable()
+    }
 }
 
 fn validate_modifiers(
@@ -1873,7 +2749,7 @@ fn validate_modifiers(
             diagnostics.push(unsupported(
                 modifier.span(),
                 format!(
-                    "modifier `{}` is not supported on {declaration}s in M3",
+                    "modifier `{}` is not supported on {declaration}s through M4",
                     modifier.spelling()
                 ),
             ));
@@ -1993,12 +2869,86 @@ fn modifier_spellings(modifiers: &[ast::Modifier]) -> Vec<String> {
         .collect()
 }
 
+struct NullFact {
+    canonical: String,
+    non_null: bool,
+}
+
+fn null_facts(expression: &ast::Expression, truth: bool) -> Vec<NullFact> {
+    let expression = match expression.kind() {
+        ast::ExpressionKind::Parenthesized(inner) => inner,
+        _ => expression,
+    };
+    if let ast::ExpressionKind::Binary {
+        left,
+        operator,
+        right,
+    } = expression.kind()
+    {
+        if operator.spelling() == "&&" && truth {
+            let mut facts = null_facts(left, true);
+            facts.extend(null_facts(right, true));
+            return facts;
+        }
+        if operator.spelling() == "||" && !truth {
+            let mut facts = null_facts(left, false);
+            facts.extend(null_facts(right, false));
+            return facts;
+        }
+    }
+    let ast::ExpressionKind::Binary {
+        left,
+        operator,
+        right,
+    } = expression.kind()
+    else {
+        return Vec::new();
+    };
+    if !matches!(operator.spelling(), "==" | "!=") {
+        return Vec::new();
+    }
+    let name = match (left.kind(), right.kind()) {
+        (ast::ExpressionKind::Name(name), ast::ExpressionKind::Null)
+        | (ast::ExpressionKind::Null, ast::ExpressionKind::Name(name)) => name,
+        _ => return Vec::new(),
+    };
+    vec![NullFact {
+        canonical: name.canonical().to_owned(),
+        non_null: (operator.spelling() == "!=") == truth,
+    }]
+}
+
 fn check_binary(
     left: &hir::Expression,
     operator: &str,
     right: &hir::Expression,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Type {
+    if operator == "??" {
+        return match &left.ty {
+            Type::Nullable(inner) if inner.accepts(&right.ty) => inner.as_ref().clone(),
+            Type::Nullable(inner) => {
+                diagnostics.push(type_error(
+                    "type.invalid-null-coalescing",
+                    format!(
+                        "right operand `{}` is not assignable to `{}`",
+                        right.ty, inner
+                    ),
+                    right.span,
+                ));
+                Type::Error
+            }
+            Type::Error => Type::Error,
+            _ => {
+                diagnostics.push(type_error(
+                    "type.invalid-null-coalescing",
+                    format!("left operand `{}` is not nullable", left.ty),
+                    left.span,
+                ));
+                Type::Error
+            }
+        };
+    }
     let valid_equal = left.ty == right.ty
         || left.ty.accepts(&right.ty)
         || right.ty.accepts(&left.ty)
@@ -2096,6 +3046,9 @@ fn statement_guarantees_return(statement: &hir::Statement) -> bool {
             else_branch: Some(else_branch),
             ..
         } => statement_guarantees_return(then_branch) && statement_guarantees_return(else_branch),
+        hir::StatementKind::Match { arms, .. } => {
+            !arms.is_empty() && arms.iter().all(|arm| block_guarantees_return(&arm.body))
+        }
         _ => false,
     }
 }
