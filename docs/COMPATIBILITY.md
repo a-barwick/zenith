@@ -75,9 +75,9 @@ error.
 |---|---|---|
 | Apex-shaped class declarations | Local | Classes, inheritance clauses, fields, properties, methods, constructors, parameters, and selected modifiers |
 | Parsed type syntax | Local | Source-faithful type names, nested generic arguments, and reserved nullable suffix |
-| Statements and expressions | Local | Blocks, declarations, assignment, calls, member/index access, control flow, loops, precedence, and selected literals/operators |
+| Statements and expressions | Local | Blocks, declarations, assignment, calls, member/index access, control flow, loops, precedence, conditional/nullable-type disambiguation, and the complete selected M2 operator surface |
 | Immutable AST and visitor | Local | Read-only accessors, complete file-aware spans, and deterministic source-order traversal |
-| Syntax recovery | Local | Partial trees plus stable declaration/member/statement diagnostics; semantic phases remain gated |
+| Syntax recovery | Local | Partial trees plus stable declaration/member/statement diagnostics, bounded generic-closer recovery, and panic-safe rejection of incomplete token streams; semantic phases remain gated |
 | `ast <file.zen>` inspection | Local | Stable goldens for both M2 acceptance fixtures and status 1/2 CLI behavior |
 
 ## Language surface

@@ -194,6 +194,30 @@ fn parses_complete_m2_surface_with_stable_golden_output() {
 }
 
 #[test]
+fn ast_disambiguates_conditional_expressions_from_nullable_declarations() {
+    let source = TempSource::new(
+        b"class Conditional {
+            void choose() {
+                condition ? whenTrue : whenFalse;
+            }
+        }",
+    );
+    let output = zenith()
+        .arg("ast")
+        .arg(source.path())
+        .output()
+        .expect("run zenith ast");
+
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("conditional @3:17..3:49\n"));
+    assert!(stdout.contains("name condition @3:17..3:26\n"));
+    assert!(stdout.contains("name whenTrue @3:29..3:37\n"));
+    assert!(stdout.contains("name whenFalse @3:40..3:49\n"));
+}
+
+#[test]
 fn reports_tokens_usage_errors_with_status_two() {
     for arguments in [vec!["tokens"], vec!["tokens", "one.zen", "two.zen"]] {
         let output = zenith().args(arguments).output().expect("run zenith");

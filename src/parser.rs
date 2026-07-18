@@ -77,6 +77,20 @@ impl ParseResult {
 
 /// Parses an already successful lexical token stream into immutable syntax.
 pub fn parse(file: &SourceFile, tokens: &[Token]) -> ParseResult {
+    if !matches!(tokens.last().map(Token::kind), Some(TokenKind::Eof)) {
+        return ParseResult {
+            unit: None,
+            diagnostics: vec![
+                Diagnostic::coded_error(
+                    Phase::Parse,
+                    "parse.expected-declaration",
+                    "expected a complete lexical token stream",
+                    None,
+                )
+                .with_help("pass the complete token stream including EOF"),
+            ],
+        };
+    }
     Parser::new(file, tokens).run()
 }
 
@@ -100,21 +114,6 @@ impl<'a> Parser<'a> {
     }
 
     fn run(mut self) -> ParseResult {
-        if self.tokens.is_empty() {
-            return ParseResult {
-                unit: None,
-                diagnostics: vec![
-                    Diagnostic::coded_error(
-                        Phase::Parse,
-                        "parse.expected-declaration",
-                        "expected a class declaration",
-                        None,
-                    )
-                    .with_help("pass the complete token stream including EOF"),
-                ],
-            };
-        }
-
         let start = self.current_span();
         let mut declarations = Vec::new();
         while !self.at_eof() {
@@ -361,6 +360,38 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type(&mut self) -> Option<Type> {
+        debug_assert!(
+            self.pending_type_closers.is_empty(),
+            "a top-level type parse cannot inherit generic closers"
+        );
+        let ty = self.parse_type_inner();
+        if !self.pending_type_closers.is_empty() {
+            let start = self
+                .pending_type_closers
+                .iter()
+                .map(|span| span.start())
+                .min()
+                .expect("pending generic closer has a start");
+            let end = self
+                .pending_type_closers
+                .iter()
+                .map(|span| span.end())
+                .max()
+                .expect("pending generic closer has an end");
+            let span = Span::new(self.current_span().source(), start, end)
+                .expect("pending generic closer span is ordered");
+            self.pending_type_closers.clear();
+            self.error_at(
+                span,
+                "parse.expected-token",
+                "unexpected extra `>` after the generic type",
+                "remove the unmatched generic type closer",
+            );
+        }
+        ty
+    }
+
+    fn parse_type_inner(&mut self) -> Option<Type> {
         let token = self.current();
         let span = token.span();
         let name = match token.kind() {
@@ -399,7 +430,7 @@ impl<'a> Parser<'a> {
                     "generic argument lists cannot be empty",
                 );
             } else {
-                while let Some(argument) = self.parse_type() {
+                while let Some(argument) = self.parse_type_inner() {
                     end = argument.span();
                     arguments.push(argument);
                     if self.take_punctuation(",").is_none() {
@@ -504,7 +535,7 @@ impl<'a> Parser<'a> {
         }
 
         let start = self.current_span();
-        if self.looks_like_variable_declaration() {
+        if self.looks_like_variable_declaration(false) {
             let variable = self.parse_variable_declaration()?;
             let end = self.expect_statement_semicolon();
             return Some(Statement::new(
@@ -575,7 +606,7 @@ impl<'a> Parser<'a> {
     fn parse_for(&mut self, start: Span) -> Option<Statement> {
         self.expect_punctuation("(", "`(` after `for`");
 
-        if self.looks_like_variable_declaration() {
+        if self.looks_like_variable_declaration(true) {
             let variable = self.parse_variable_declaration()?;
             if self.take_punctuation(":").is_some() {
                 let iterable = self.parse_expression()?;
@@ -1067,17 +1098,16 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn looks_like_variable_declaration(&self) -> bool {
+    fn looks_like_variable_declaration(&self, allow_enhanced_for_colon: bool) -> bool {
         let Some(after_type) = self.scan_type(self.cursor) else {
             return false;
         };
         self.token_is_name(after_type)
-            && matches!(
-                self.tokens.get(after_type + 1).map(Token::kind),
-                Some(TokenKind::Operator("="))
-                    | Some(TokenKind::Punctuation(";"))
-                    | Some(TokenKind::Punctuation(":"))
-            )
+            && match self.tokens.get(after_type + 1).map(Token::kind) {
+                Some(TokenKind::Operator("=")) | Some(TokenKind::Punctuation(";")) => true,
+                Some(TokenKind::Punctuation(":")) => allow_enhanced_for_colon,
+                _ => false,
+            }
     }
 
     fn scan_type(&self, start: usize) -> Option<usize> {
@@ -1189,7 +1219,7 @@ impl<'a> Parser<'a> {
                             | "continue"
                     )
             )
-            || self.looks_like_variable_declaration()
+            || self.looks_like_variable_declaration(false)
     }
 
     fn synchronize_declaration(&mut self) {
@@ -1279,8 +1309,18 @@ impl<'a> Parser<'a> {
     }
 
     fn error(&mut self, code: &str, message: impl Into<String>, label: impl Into<String>) {
+        self.error_at(self.current_span(), code, message, label);
+    }
+
+    fn error_at(
+        &mut self,
+        span: Span,
+        code: &str,
+        message: impl Into<String>,
+        label: impl Into<String>,
+    ) {
         self.diagnostics.push(
-            Diagnostic::coded_error(Phase::Parse, code, message, Some(self.current_span()))
+            Diagnostic::coded_error(Phase::Parse, code, message, Some(span))
                 .with_primary_label(label),
         );
     }
@@ -1463,7 +1503,9 @@ fn join_spans(start: Span, end: Span) -> Span {
 
 #[cfg(test)]
 mod tests {
-    use super::{ParseResult, parse};
+    use super::{
+        ParseResult, SIMPLE_CLASS_MODIFIERS, SIMPLE_MEMBER_MODIFIERS, TYPE_KEYWORDS, parse,
+    };
     use crate::ast::{
         ClassMember, ExpressionKind, ForInitializer, StatementKind, Visitor,
         walk_class_declaration, walk_constructor_declaration, walk_expression,
@@ -1484,6 +1526,23 @@ mod tests {
             lexical.diagnostics
         );
         parse(file, &lexical.tokens)
+    }
+
+    fn parse_statement_expression(text: &str) -> crate::ast::Expression {
+        let result = parse_text(&format!("class Expressions {{ void run() {{ {text}; }} }}"));
+        assert!(
+            result.diagnostics.is_empty(),
+            "{text}: {:?}",
+            result.diagnostics
+        );
+        let unit = result.unit.expect("valid source produces a unit");
+        let ClassMember::Method(method) = &unit.declarations()[0].members()[0] else {
+            panic!("expected method");
+        };
+        let StatementKind::Expression(expression) = method.body().statements()[0].kind() else {
+            panic!("expected expression statement");
+        };
+        expression.clone()
     }
 
     #[test]
@@ -1545,6 +1604,62 @@ mod tests {
     }
 
     #[test]
+    fn parses_every_type_word_and_modifier_without_applying_legality_rules() {
+        let class_modifiers = format!(
+            "{} with sharing without sharing inherited sharing",
+            SIMPLE_CLASS_MODIFIERS.join(" ")
+        );
+        let member_modifiers = SIMPLE_MEMBER_MODIFIERS.join(" ");
+        let fields = TYPE_KEYWORDS
+            .iter()
+            .enumerate()
+            .map(|(index, ty)| format!("{member_modifiers} {ty} value{index};"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let result = parse_text(&format!(
+            "{class_modifiers} class CompleteModifiers {{ {fields} Id sourceFaithfulId; }}"
+        ));
+
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        let unit = result.unit.unwrap();
+        let class = &unit.declarations()[0];
+        assert_eq!(
+            class
+                .modifiers()
+                .iter()
+                .map(|modifier| modifier.canonical())
+                .collect::<Vec<_>>(),
+            [
+                "public",
+                "private",
+                "protected",
+                "global",
+                "abstract",
+                "virtual",
+                "static",
+                "final",
+                "transient",
+                "with sharing",
+                "without sharing",
+                "inherited sharing",
+            ]
+        );
+        assert_eq!(class.members().len(), TYPE_KEYWORDS.len() + 1);
+        for (member, expected_type) in class.members().iter().zip(TYPE_KEYWORDS) {
+            let ClassMember::Field(field) = member else {
+                panic!("expected field");
+            };
+            assert_eq!(field.ty().name().canonical(), *expected_type);
+            assert_eq!(field.modifiers().len(), SIMPLE_MEMBER_MODIFIERS.len());
+        }
+        let ClassMember::Field(id_field) = class.members().last().unwrap() else {
+            panic!("expected Id field");
+        };
+        assert_eq!(id_field.ty().display_name(), "Id");
+        assert_eq!(id_field.ty().name().canonical(), "id");
+    }
+
+    #[test]
     fn preserves_expression_precedence_and_assignment_associativity() {
         let result = parse_text(
             "class Expressions {
@@ -1582,6 +1697,111 @@ mod tests {
             panic!("expected outer assignment");
         };
         assert!(matches!(value.kind(), ExpressionKind::Assignment { .. }));
+    }
+
+    #[test]
+    fn parses_every_m2_operator_in_its_own_precedence_family() {
+        for operator in [
+            "*",
+            "/",
+            "%",
+            "+",
+            "-",
+            "<<",
+            ">>",
+            ">>>",
+            "<",
+            "<=",
+            ">",
+            ">=",
+            "instanceof",
+            "==",
+            "!=",
+            "===",
+            "!==",
+            "&",
+            "^",
+            "|",
+            "&&",
+            "||",
+            "??",
+        ] {
+            let expression = parse_statement_expression(&format!("left {operator} right"));
+            let ExpressionKind::Binary {
+                operator: parsed, ..
+            } = expression.kind()
+            else {
+                panic!("expected binary expression for {operator}");
+            };
+            assert_eq!(parsed.spelling(), operator);
+        }
+
+        for operator in [
+            "=", "+=", "-=", "*=", "/=", "&=", "|=", "^=", "<<=", ">>=", ">>>=",
+        ] {
+            let expression = parse_statement_expression(&format!("target {operator} value"));
+            let ExpressionKind::Assignment {
+                operator: parsed, ..
+            } = expression.kind()
+            else {
+                panic!("expected assignment expression for {operator}");
+            };
+            assert_eq!(parsed.spelling(), operator);
+        }
+
+        for operator in ["!", "~", "+", "-", "++", "--"] {
+            let expression = parse_statement_expression(&format!("{operator}value"));
+            let ExpressionKind::Unary {
+                operator: parsed, ..
+            } = expression.kind()
+            else {
+                panic!("expected unary expression for {operator}");
+            };
+            assert_eq!(parsed.spelling(), operator);
+        }
+
+        for operator in ["++", "--"] {
+            let expression = parse_statement_expression(&format!("value{operator}"));
+            let ExpressionKind::Postfix {
+                operator: parsed, ..
+            } = expression.kind()
+            else {
+                panic!("expected postfix expression for {operator}");
+            };
+            assert_eq!(parsed.spelling(), operator);
+        }
+
+        assert!(matches!(
+            parse_statement_expression("condition ? yes : no").kind(),
+            ExpressionKind::Conditional { .. }
+        ));
+    }
+
+    #[test]
+    fn precedence_ladder_is_left_associative_with_tighter_children() {
+        let expression =
+            parse_statement_expression("a || b && c | d ^ e & f == g < h << i + j * k");
+        let expected = ["||", "&&", "|", "^", "&", "==", "<", "<<", "+", "*"];
+        let mut current = &expression;
+        for operator in expected {
+            let ExpressionKind::Binary {
+                operator: parsed,
+                right,
+                ..
+            } = current.kind()
+            else {
+                panic!("expected {operator} in precedence ladder");
+            };
+            assert_eq!(parsed.spelling(), operator);
+            current = right;
+        }
+
+        let expression = parse_statement_expression("a - b - c");
+        let ExpressionKind::Binary { left, operator, .. } = expression.kind() else {
+            panic!("expected additive expression");
+        };
+        assert_eq!(operator.spelling(), "-");
+        assert!(matches!(left.kind(), ExpressionKind::Binary { .. }));
     }
 
     #[test]
@@ -1647,6 +1867,54 @@ mod tests {
             method.body().statements()[9].kind(),
             StatementKind::Return(None)
         ));
+    }
+
+    #[test]
+    fn parses_empty_and_expression_list_traditional_for_clauses() {
+        let result = parse_text(
+            "class Loops {
+                void run() {
+                    for (;;) ;
+                    for (left = 0, right = 1; left < right; left++, right--) {
+                        continue;
+                    }
+                }
+            }",
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        let unit = result.unit.unwrap();
+        let ClassMember::Method(method) = &unit.declarations()[0].members()[0] else {
+            panic!("expected method");
+        };
+        let StatementKind::For {
+            initializer,
+            condition,
+            update,
+            body,
+        } = method.body().statements()[0].kind()
+        else {
+            panic!("expected empty traditional for");
+        };
+        assert!(initializer.is_none());
+        assert!(condition.is_none());
+        assert!(update.is_empty());
+        assert!(matches!(body.kind(), StatementKind::Empty));
+
+        let StatementKind::For {
+            initializer,
+            condition,
+            update,
+            body,
+        } = method.body().statements()[1].kind()
+        else {
+            panic!("expected expression-list traditional for");
+        };
+        assert!(
+            matches!(initializer, Some(ForInitializer::Expressions(expressions)) if expressions.len() == 2)
+        );
+        assert!(condition.is_some());
+        assert_eq!(update.len(), 2);
+        assert!(matches!(body.kind(), StatementKind::Block(_)));
     }
 
     #[test]
@@ -1801,6 +2069,35 @@ mod tests {
     }
 
     #[test]
+    fn reports_surplus_generic_closers_and_recovers_following_members() {
+        let source = "class Types {
+                Map<String, List<Integer>>> malformed;
+                Integer recovered;
+            }";
+        let result = parse_text(source);
+        assert_eq!(result.diagnostics.len(), 1);
+        assert_eq!(result.diagnostics[0].code, "parse.expected-token");
+        assert_eq!(
+            result.diagnostics[0].message,
+            "unexpected extra `>` after the generic type"
+        );
+        let extra_closer = source.find(">>>").unwrap() + 2;
+        let span = result.diagnostics[0].span.unwrap();
+        assert_eq!(span.start(), extra_closer);
+        assert_eq!(span.end(), extra_closer + 1);
+
+        let unit = result.unit.unwrap();
+        let members = unit.declarations()[0].members();
+        assert_eq!(members.len(), 2);
+        assert!(
+            matches!(&members[0], ClassMember::Field(field) if field.name().spelling() == "malformed")
+        );
+        assert!(
+            matches!(&members[1], ClassMember::Field(field) if field.name().spelling() == "recovered")
+        );
+    }
+
+    #[test]
     fn emits_stable_diagnostic_families_for_invalid_and_unsupported_syntax() {
         let cases = [
             ("interface Nope {}", "parse.expected-declaration"),
@@ -1854,11 +2151,31 @@ mod tests {
     }
 
     #[test]
-    fn rejects_a_token_stream_without_eof_without_panicking() {
+    fn rejects_incomplete_token_streams_without_panicking() {
         let mut sources = SourceMap::new();
-        let source = sources.add("test.zen", "");
-        let result = parse(sources.get(source).unwrap(), &[]);
-        assert!(result.unit.is_none());
-        assert_eq!(result.diagnostics[0].code, "parse.expected-declaration");
+        let source = sources.add("test.zen", "class Complete {}");
+        let file = sources.get(source).unwrap();
+        let mut tokens = lex(file).tokens;
+        tokens.pop();
+
+        for incomplete in [&[][..], tokens.as_slice()] {
+            let result = parse(file, incomplete);
+            assert!(result.unit.is_none());
+            assert_eq!(result.diagnostics.len(), 1);
+            assert_eq!(result.diagnostics[0].code, "parse.expected-declaration");
+            assert_eq!(
+                result.diagnostics[0].message,
+                "expected a complete lexical token stream"
+            );
+        }
+    }
+
+    #[test]
+    fn accepts_an_empty_compilation_unit() {
+        let result = parse_text("");
+        assert!(result.diagnostics.is_empty());
+        let unit = result.unit.unwrap();
+        assert!(unit.declarations().is_empty());
+        assert_eq!(unit.span().start(), unit.span().end());
     }
 }
