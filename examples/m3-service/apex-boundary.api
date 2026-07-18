@@ -1,0 +1,3 @@
+class Audit {
+  static void record(String message);
+}

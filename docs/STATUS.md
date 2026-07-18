@@ -4,8 +4,10 @@
 
 ## Active milestone
 
-None. M2 — Parsed syntax and immutable AST is complete. M3 remains Planned
-until its acceptance fixture and checking/emission specifications are explicit.
+M3 — Typed Apex baseline and deterministic emission is Active. Its acceptance
+fixture and observable project, checking, lowering, emission, source-map, and
+verification contracts are specified in
+`docs/specifications/typed-apex-baseline.md`.
 
 ## Completed
 
@@ -76,10 +78,8 @@ until its acceptance fixture and checking/emission specifications are explicit.
 
 ## Immediate target
 
-Specify M3's multi-file acceptance fixture, project/configuration contract,
-checked baseline, Apex IR and emission format, source maps, handwritten-Apex
-boundary summaries, and backend-neutral verification outcomes before
-activating M3.
+Implement the specified M3 project-to-Apex vertical slice and its positive,
+negative, golden, determinism, CLI, and optional verification-adapter evidence.
 
 ## Known limitations
 

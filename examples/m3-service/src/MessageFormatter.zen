@@ -1,0 +1,5 @@
+public class MessageFormatter {
+    public static String decorate(String value) {
+        return '[' + value + ']';
+    }
+}
