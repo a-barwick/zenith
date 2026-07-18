@@ -9,12 +9,14 @@ runtime. No separate VM.
 
 ## Current Position
 
-The lexer and parser are complete. Zenith accepts the selected Apex-shaped
-baseline and produces immutable, source-spanned syntax with deterministic
-diagnostics.
+The first deployable-language checkpoint is complete. Zenith now discovers
+multi-file projects, resolves and type-checks a selected Apex-shaped service
+baseline, and emits deterministic SFDX class source, metadata, manifests, and
+source maps.
 
-The next checkpoint adds cross-file checking and deterministic Apex emission.
-`check`, `build`, and `emit` remain under active development.
+`check`, `build`, and `emit` are available now. The next checkpoint brings
+stronger nullability and domain types; M3 remains deliberately smaller than
+full Apex.
 
 ## First Run
 
@@ -25,6 +27,9 @@ cargo build
 cargo test
 cargo run -- tokens examples/hello.zen
 cargo run -- ast examples/hello.zen
+cargo run -- check examples/m3-service
+cargo run -- emit examples/m3-service
+cargo run -- build examples/m3-service
 ```
 
 ## System Map
@@ -46,7 +51,7 @@ Generated Apex is inspectable product output, not a hidden runtime detail.
 
 - [Vision](docs/VISION.md) — purpose and operating principles
 - [Roadmap](ROADMAP.md) — milestones and exit criteria
-- [Current status](docs/STATUS.md) — shipped work and the active checkpoint
+- [Current status](docs/STATUS.md) — shipped work and the next checkpoint
 - [Compatibility](docs/COMPATIBILITY.md) — supported language surface
 - [Development](docs/DEVELOPMENT.md) — build, test, and contribution workflow
 - [Architecture](docs/ARCHITECTURE.md) — compiler and runtime boundaries

@@ -15,8 +15,10 @@ syntax.
 | Unsupported | Recognized or requested but rejected explicitly |
 | Planned | Not implemented |
 
-No feature is currently **Verified** or **Compatible** because the compiler
-does not yet emit Apex.
+No feature is currently **Verified** against Salesforce. M3's emitted-Apex
+surface remains **Local**: its deterministic compiler behavior is executable,
+and its generated acceptance project passes a pinned local Apex compiler smoke,
+but that evidence is not a Salesforce compatibility result.
 
 ## Verification outcomes
 
@@ -28,6 +30,7 @@ Every backend operation reports one of these outcomes:
 | Passed | The backend declares the required capability and the requested check or execution succeeded |
 | Unsupported | The backend cannot cover part of the emitted surface; the Zenith build remains valid but requires another backend |
 | Failed | The backend declares support and reports a compile, test, or runtime failure |
+| Internal error | The adapter could not launch or observe the selected backend reliably |
 
 An Apex Exec pass is local evidence for its declared profile, not Salesforce
 verification. An unsupported result is neither a pass nor a Zenith source
@@ -48,14 +51,15 @@ error.
 
 | Feature | Status | Lowering | Notes |
 |---|---|---|---|
-| `zenith --help` | Local | None | Documents current inspection commands |
+| `zenith --help` | Local | None | Documents inspection and M3 project commands |
 | `zenith --version` | Local | None | Prints the crate version |
 | Local and CI verification | Local | None | Rust 1.88.0 fmt/test/Clippy gates plus current-stable tests |
 | Source identities | Local | None | Stable within one compiler session |
 | File-aware byte spans | Local | None | UTF-8-safe slicing and Unicode-scalar line/column views |
 | Phase-owned diagnostics | Local | None | Source, language, schema, verification, and project phases represented |
 | `.zen` parsing | Local | None | Selected M2 grammar produces immutable source-spanned syntax |
-| `.zen` compilation | Planned | TBD | Parsing is implemented; checking and emission begin in M3 |
+| `.zen` compilation | Local | Native | M3 project checking lowers the selected typed baseline through HIR and Apex IR |
+| `check`, `build`, and `emit` | Local | None | Deterministic project commands with distinct compiler and usage failures |
 
 ## Lexical surface
 
@@ -84,12 +88,12 @@ error.
 
 | Feature | Parse | Check | Emit | Status | Lowering | Target |
 |---|---:|---:|---:|---|---|---|
-| Apex-shaped classes and methods | Yes | No | No | Local | None | M2–M3 |
-| Primitive expressions/control flow | Yes | No | No | Local | None | M2–M3 |
-| Collections and ordinary calls | Yes | No | No | Local | None | M2–M3 |
-| Case-insensitive resolution | No | No | No | Planned | None | M1–M3 |
-| Handwritten Apex boundary declarations | No | No | No | Planned | None | M3 |
-| Non-null and nullable types | Yes | No | No | Local | None | M2/M4 |
+| Selected Apex-shaped classes, fields, properties, and methods | Yes | Yes | Yes | Local | Native | M3 |
+| Primitive expressions and selected control flow | Yes | Yes | Yes | Local | Native | M3 |
+| `List`/`Set`/`Map` types and selected members | Yes | Yes | Yes | Local | Native | M3 |
+| Case-insensitive cross-file resolution | Yes | Yes | Yes | Local | None | M3 |
+| Handwritten Apex boundary declarations | Yes | Yes | No | Local | None | M3 |
+| Nullable suffixes and flow-sensitive null safety | Yes | No | No | Unsupported | None | M4 |
 | Immutable `let` | No | No | No | Planned | TBD | M4 |
 | Records/value types | No | No | No | Planned | TBD | M4 |
 | Typed `Id<T>` | No | No | No | Planned | TBD | M4 |
@@ -112,16 +116,16 @@ Proposed examples in the vision and specifications do not change these rows.
 
 | Capability | Status | Target |
 |---|---|---|
-| Deterministic Apex text emission | Planned | M3 |
-| SFDX `.cls` and `.cls-meta.xml` layout | Planned | M3 |
-| Required target Salesforce API version | Planned | M3 |
-| Generated-name collision checks | Planned | M3 |
-| Zenith-to-Apex source maps | Planned | M3 |
-| Pinned Apex Exec compile smoke evidence | Planned | M3 |
-| Backend-neutral verification outcomes | Planned | M3 |
-| Apex Exec generated-Apex checking | Planned | M3/M10 |
-| SFDX `.trigger` and `.trigger-meta.xml` layout | Planned | M9 |
+| Deterministic Apex text emission | Local | M3 |
+| SFDX `.cls`, `.cls-meta.xml`, and project layout | Local | M3 |
+| Required target Salesforce API version | Local | M3 |
+| Generated-name collision checks | Local | M3 |
+| Per-class Zenith-to-Apex source maps | Local | M3 |
+| Pinned Apex Exec compile smoke evidence | Local | M3 |
+| Backend-neutral verification outcomes and evidence | Local | M3 |
+| Apex Exec generated-Apex compile checking | Local | M3 |
 | Structured Apex Exec checking/testing adapter | Planned | M10 |
+| SFDX `.trigger` and `.trigger-meta.xml` layout | Planned | M9 |
 | Versioned Apex Exec capability protocol | Planned | M10 |
 | Generated-Apex local test execution | Planned | M10 |
 | Source-mapped stack frames and coverage | Planned | M10 |

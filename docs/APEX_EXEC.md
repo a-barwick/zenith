@@ -6,9 +6,10 @@ and integration context, not a dependency declaration.
 
 ## Audited baseline
 
-The repository was reviewed against Apex Exec commit
+The repository was reviewed and the M3 generated-Apex smoke was run against
+Apex Exec commit
 [`1e4f1ca1938abfc996651ae447f227e0db680b6a`](https://github.com/a-barwick/apex-exec/tree/1e4f1ca1938abfc996651ae447f227e0db680b6a)
-on 2026-07-16.
+on 2026-07-17.
 
 At that revision:
 
@@ -23,6 +24,31 @@ At that revision:
 
 These facts describe one revision. Re-run the comparison before relying on a
 new Apex Exec capability.
+
+## Recorded M3 smoke
+
+The executable acceptance project is `examples/m3-service`. Zenith generates
+`GreetingService.cls` and `MessageFormatter.cls` beside the configured
+handwritten `Audit.cls`, then invokes the pinned backend against the emitted
+SFDX project with capability profile `zenith-m3-apex-baseline`.
+
+The reproducible command is:
+
+```bash
+scripts/verify-apex-exec-m3.sh /path/to/apex-exec-at-the-pinned-revision
+```
+
+The recorded result was:
+
+```text
+Apex verification: passed (apex-exec, revision 1e4f1ca1938abfc996651ae447f227e0db680b6a, profile zenith-m3-apex-baseline).
+OK (3 classes, 3 source files)
+Built 2 classes to examples/m3-service/.zenith.
+```
+
+This is local compiler-smoke evidence only. The pinned profile does not support
+sharing modifiers, map bracket indexing, or the future Salesforce-specific
+surface, and the result is not Salesforce verification.
 
 ## Different products
 
@@ -80,17 +106,19 @@ protocol, but each compiler remains independently buildable and testable.
 Lexing and parsing are specified and tested independently. Apex Exec is not an
 installed tool, crate dependency, or acceptance oracle.
 
-### M3: optional compile smoke evidence
+### M3: implemented optional compile smoke evidence
 
 After Zenith has checked, lowered, validated Apex IR, and emitted an isolated
-SFDX project, CI may invoke a pinned Apex Exec revision for the supported
-baseline. The smoke adapter may use exit status and preserve complete human
-output, but it does not parse or source-map that output.
+SFDX project, `zenith build --verify-apex-exec <executable>` may invoke the
+pinned Apex Exec revision for the supported baseline. The smoke adapter uses
+exit status and preserves complete human output, but it does not parse or
+source-map that output.
 
-The result categories are `success`, `failure`, `unsupported`, and
+The result categories are `passed`, `failed`, `unsupported`, and
 `internal-error`. Missing capability is `unsupported`, never success. The
 backend revision and capability profile are recorded with the verification
-result. `zenith check` and `zenith build` remain independent of Apex Exec.
+result. `zenith check` and ordinary `zenith build` remain independent of Apex
+Exec.
 
 ### M4-M9: capability-gated evidence
 

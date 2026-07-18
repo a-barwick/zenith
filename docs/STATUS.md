@@ -4,101 +4,70 @@
 
 ## Active milestone
 
-M3 — Typed Apex baseline and deterministic emission is Active. Its acceptance
-fixture and observable project, checking, lowering, emission, source-map, and
-verification contracts are specified in
-`docs/specifications/typed-apex-baseline.md`.
+None. M3 — Typed Apex baseline and deterministic emission is complete. M4
+remains Planned until its acceptance fixture and safe-value/domain-type
+contracts are explicit enough to implement without guesswork.
 
 ## Completed
 
-- Rust binary and library crate with no third-party dependencies
-- Rust 1.88.0 toolchain pin plus GitHub Actions gates for formatting, tests,
-  Clippy, and current-stable test compatibility
-- Repository-level product, roadmap, architecture, compatibility, development,
-  decision, and specification documentation
-- Tested bootstrap help/version aliases, no-argument help, unavailable-command
-  behavior, and non-UTF-8 argument handling
-- Session-local source identities, ordered file-aware byte spans, and safe
-  source slicing at UTF-8 boundaries
-- Compiler diagnostic categories for source, lexing, parsing, resolution,
-  typing, schema checking, effects, lowering, emission, verification, and
-  project orchestration
-- Initial decisions covering compile-to-Apex deployment, case-insensitive
-  names, generated Apex as a product surface, the Apex Exec process boundary,
-  and generated-test oracle requirements
-- M1 lexical and diagnostic contracts that settle identifiers, keyword and
-  operator inventory, strings/comments, recovery, positions, codes, ordering,
-  CLI output, and exit behavior
-- Small and broad `.zen` fixtures reserved for the first token slice
-- A revision-pinned Apex Exec comparison and staged integration contract
-- Documented target architecture for optional generated-Apex verification,
-  handwritten Apex API summaries, and coverage-guided test generation
-- Complete M1 token model for Apex-shaped and reserved Zenith words, integers,
-  decoded single-quoted strings, punctuation, maximal-munch operators, and EOF
-- Exact identifier spelling, ASCII-lowercase canonical keys, and file-aware
-  spans exposed through the public compiler API
-- UTF-8 source loading and Unicode-scalar line/column mapping across LF, CRLF,
-  and CR line endings
-- Recoverable lexical diagnostics for invalid identifiers, characters, escapes,
-  double-quoted strings, and unterminated strings/comments
-- Stable diagnostic codes, primary/secondary labels, notes, help, deterministic
-  ordering, and panic-safe rendering of malformed spans
-- `zenith tokens <file.zen>` with golden output for both M1 acceptance fixtures,
-  explicit status 1 source/compiler failures, and status 2 usage failures
-- Executable coverage of the complete keyword, contextual-word, punctuation,
-  operator, escape, comment, recovery, source-position, and CLI contracts
-- M2 parsed-syntax specification covering declarations, types, statements,
-  expressions, precedence, immutable syntax, recovery, diagnostics, and CLI
-- Immutable source-spanned AST for classes, fields, properties, accessors,
-  methods, constructors, parameters, nested/nullable type syntax, statements,
-  and expressions
-- Shared read-only AST visitor with deterministic source-order traversal and no
-  semantic facts stored in parsed syntax
-- Parser support for blocks, variables, assignments, calls, member/index
-  access, conditionals, traditional/enhanced loops, returns, throws, and the
-  specified unary/binary/postfix expression precedence
-- Generic-close handling for nested types despite maximal-munch `>>` and `>>>`
-  lexer tokens
-- Localized declaration, member, and statement recovery with stable parse
-  diagnostics and recoverable partial trees
-- Context-sensitive syntactic lookahead that keeps enhanced `for` declarations
-  distinct from ordinary conditional expressions beginning with nullable-shaped
-  names
-- Panic-safe parser entry and generic-close recovery for incomplete public token
-  streams and surplus closers inside maximal-munch `>>`/`>>>` tokens
-- `zenith ast <file.zen>` with deterministic goldens for both M2 acceptance
-  fixtures, lexical/parse gating, and explicit status 1/2 behavior
-- 61 passing Rust tests spanning source, diagnostics, lexing, every M2 type,
-  modifier, operator and loop-header family, parser shape and purity, visitor
-  traversal, recovery, CLI diagnostics, and five inspection goldens, including
-  the complete `examples/parsed-baseline.zen` surface
-- Instrumented `cargo llvm-cov --all-targets` coverage of 90.60% lines overall,
-  including 90.81% for the parser, 83.31% for the AST/renderer, 98.92% for the
-  CLI, and 98.88% for the lexer
+- M0 repository/compiler foundation, M1 lexical core, and M2 immutable parsed
+  syntax
+- Project loading from `zenith.toml`, deterministic recursive `.zen`
+  discovery, one-class-per-file validation, and required Salesforce API
+  version handling
+- Cross-file, case-insensitive declaration/member/method resolution with
+  stable diagnostics for collisions, visibility, modifiers, scopes, and
+  unsupported parsed syntax
+- Checked M3 primitive, class, boundary, and `List`/`Set`/`Map` types plus
+  selected call/member/index targets in typed HIR
+- Declaration-only handwritten Apex boundary summaries with unknown external
+  effects and a real handwritten `Audit.cls` acceptance dependency
+- A distinct validated Apex IR, deterministic readable Apex and metadata,
+  per-class source maps, `build.json`, and an SFDX `sfdx-project.json`
+- Public `check`, `build`, and `emit` CLI commands with status 1 compilation
+  failures and status 2 usage failures
+- Backend-neutral `passed`, `failed`, `unsupported`, and `internal-error`
+  verification outcomes, including complete evidence recording
+- Optional pinned Apex Exec M3 smoke verification at revision
+  `1e4f1ca1938abfc996651ae447f227e0db680b6a` and capability profile
+  `zenith-m3-apex-baseline`
+- Byte-deterministic M3 acceptance output for two generated Zenith classes
+  beside one handwritten Apex class; the pinned smoke reports
+  `OK (3 classes, 3 source files)`
+- 93 passing Rust tests: 58 library, 23 CLI, and 12 M3 end-to-end tests,
+  including positive, negative, golden, determinism, visibility, filesystem,
+  and verifier evidence
+- Instrumented `cargo llvm-cov --all-targets` coverage of 88.92% lines overall,
+  including 84.87% for the checker, 96.84% for lowering, 93.63% for emission,
+  and 98.97% for verification
 
 ## Immediate target
 
-Implement the specified M3 project-to-Apex vertical slice and its positive,
-negative, golden, determinism, CLI, and optional verification-adapter evidence.
+Specify the M4 acceptance fixture and the observable contracts for nullability,
+flow narrowing, immutable `let`, records, typed IDs, sealed results, and source
+mapping through any generated helper code. Do not mark M4 Active until that
+specification slice is executable and unambiguous.
 
 ## Known limitations
 
-- Zenith source is tokenized and the selected M2 grammar is parsed, but it is
-  not resolved, checked, lowered, or emitted. Parser acceptance is Local syntax
-  support and does not imply Apex compatibility.
-- `check`, `build`, `emit`, `test`, and `verify` are documented targets but are
-  intentionally unavailable.
-- `SourceMap::add` assigns a new session-local ID per loaded entry. Stable
-  path identity across project reparses, caching, and content identities are M3
-  work.
-- Source spans remain byte offsets; console locations are derived as 1-based
-  Unicode-scalar line and column pairs.
-- The proposed language examples document direction, not shipped syntax.
-- No Salesforce schema, Apex Exec executable adapter, Salesforce CLI, or org
-  integration exists. `docs/APEX_EXEC.md` is a boundary contract, not an
-  implemented integration.
-- No test execution, coverage, or generated-test integration exists. The
-  documented generated-test workflow is a planned interface.
+- M3 intentionally accepts a selected Apex-compatible service-class baseline,
+  not arbitrary Apex source. Constructors, inheritance, interfaces, nullable
+  suffixes, safe navigation, postfix expressions, `do while`, `throw`, and
+  unlisted collection behavior are rejected explicitly.
+- Strong non-null types, flow narrowing, immutable bindings, value records,
+  typed SObject IDs, and exhaustive results begin in M4.
+- Handwritten Apex interoperability uses a small developer-authored signature
+  summary. Extracted semantic API indexes, inheritance, overload conversions,
+  and external effect contracts are not implemented.
+- No Salesforce schema, query-shape, security, governor-effect, DML, trigger,
+  async, or runtime-helper support exists yet.
+- The M3 Apex Exec adapter is an optional revision-pinned compile smoke using
+  process exit status and preserved output. It is not a structured protocol,
+  runtime test adapter, or Salesforce verification.
+- Source maps cover generated class text. Backend diagnostic translation,
+  stack-frame mapping, runtime coverage mapping, and generated-test provenance
+  remain M10 work.
+- Project caching and content fingerprints are not implemented.
 - No repository license or crate-publication policy has been selected; future
   tasks must not infer one.
 
@@ -107,9 +76,10 @@ negative, golden, determinism, CLI, and optional verification-adapter evidence.
 After meaningful implementation work:
 
 - Update the completed and limitation lists above.
-- Keep exactly one immediate target aligned with the active milestone.
+- Keep exactly one immediate target aligned with the roadmap.
 - Update `docs/COMPATIBILITY.md` for changed source or emitted behavior.
 - Update the owning specification when observable behavior changes.
-- Add or update executable positive, negative, and golden fixtures.
+- Add executable positive and negative tests plus an emission golden when
+  generated output changes.
 - Add an ADR if an architectural boundary or expensive choice changed.
 - Run the verification commands in `AGENTS.md`.

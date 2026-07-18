@@ -8,8 +8,9 @@
 
 `rust-toolchain.toml` pins Rust 1.88.0 with `rustfmt` and Clippy so local and CI
 quality gates use the declared minimum toolchain. The compiler crate has no
-third-party dependencies. Salesforce CLI and Apex Exec become optional
-verification tools only when their roadmap integrations arrive.
+third-party dependencies. Apex Exec is optional for the revision-pinned M3
+generated-Apex smoke; ordinary checking and building require neither Apex Exec
+nor Salesforce CLI.
 
 ## Build and inspect
 
@@ -34,8 +35,17 @@ cargo run -- ast examples/parsed-baseline.zen
 `examples/parsed-baseline.zen` is the broad executable parser/renderer fixture
 covering the complete M2 surface beyond the required lexical baseline.
 
-Do not document a CLI command as current behavior before an executable test
-passes.
+The complete M3 project fixture is `examples/m3-service`:
+
+```bash
+cargo run -- check examples/m3-service
+cargo run -- emit examples/m3-service
+cargo run -- build examples/m3-service
+```
+
+`check` writes nothing, `emit` prints the complete ordered artifact set, and
+`build` writes the SFDX-compatible tree beneath the configured `.zenith`
+directory.
 
 ## Required verification
 
@@ -45,10 +55,25 @@ cargo test
 cargo clippy --all-targets -- -D warnings
 ```
 
-Run the relevant CLI example after changing command behavior. Once emission
-exists, inspect the generated Apex and run its available compiler verification.
-GitHub Actions runs the required gates with Rust 1.88.0 and also executes the
-test suite on the current stable Rust release.
+Run the relevant CLI example after changing command behavior. Inspect generated
+Apex after emission changes. GitHub Actions runs the required gates with Rust
+1.88.0 and also executes the test suite on the current stable Rust release.
+
+Coverage is measured separately from correctness:
+
+```bash
+rustup run stable cargo llvm-cov --all-targets --summary-only
+```
+
+To repeat the optional M3 Apex Exec smoke, use a checkout at the exact revision
+recorded in `docs/APEX_EXEC.md`:
+
+```bash
+scripts/verify-apex-exec-m3.sh /path/to/pinned/apex-exec
+```
+
+The script refuses any other revision, builds the backend with its lockfile,
+builds the M3 fixture, and requires a `passed` verification outcome.
 
 ## Git workflow
 
@@ -186,7 +211,8 @@ compatibility evidence.
 - Execute emitted Apex for user-facing local tests; do not add a separate
   Zenith HIR runtime as a shortcut.
 - Keep `check` and `build` independent of Apex Exec availability.
-- Pin the backend protocol and record its declared capability profile.
+- Pin the backend revision/profile and record complete evidence. A structured
+  backend protocol remains M10 work.
 - Treat unsupported backend surface as a distinct verification outcome, not a
   Zenith compile failure or a pass.
 - Map backend diagnostics, stack frames, and coverage through generated Apex
