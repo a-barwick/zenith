@@ -6,6 +6,7 @@ implementation but do not replace executable evidence.
 - [Language foundations](language-foundations.md)
 - [Lexical structure](lexical-structure.md)
 - [Parsed syntax](syntax.md)
+- [Typed Apex baseline and emission](typed-apex-baseline.md)
 - [Diagnostics](diagnostics.md)
 - [Governor effects](governor-effects.md)
 - [Testing and test generation](testing-and-test-generation.md)

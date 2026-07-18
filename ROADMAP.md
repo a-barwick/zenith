@@ -71,7 +71,7 @@ logic.
 
 ## M3 — Typed Apex baseline and deterministic emission
 
-**Status:** Planned
+**Status:** Complete
 
 ### Scope
 

@@ -1,36 +1,36 @@
 # Architecture
 
-## Current compiler front end
+## Current compiler pipeline
 
-M2 implements the complete source-to-immutable-syntax boundary:
+M3 implements the first complete project-to-Apex vertical slice:
 
 ```text
-CLI help/version/tokens/ast
-
-SourceMap
-  ├── SourceFile
-  ├── SourceId
-  ├── file-aware byte Span
-  └── Unicode-scalar source locations
-          │
-          ▼
-Lexer ───► tokens with exact spans, canonical names, and decoded strings
-          │
-          ▼
-Parser ──► immutable untyped syntax with source-spanned nodes
-          │
-          ├──► shared read-only visitor
-          └──► stable AST inspection renderer
-
-Diagnostic
-  ├── stable code, severity, and owning phase
-  ├── primary/secondary labels, notes, and help
-  └── deterministic source rendering
+zenith.toml + .zen sources + optional Apex boundary summary
+    │
+    ▼
+Project loader ─► deterministic source discovery and SourceMap identities
+    │
+    ▼
+Lexer/parser ───► immutable source-spanned syntax
+    │
+    ▼
+Checker ────────► cross-file symbols, scopes, types, selected targets, HIR
+    │
+    ▼
+Lowering ───────► validated Apex IR
+    │
+    ▼
+Emitter ────────► .cls + metadata + per-class maps + build/SFDX manifests
+    │
+    └──► optional pinned Apex Exec process smoke
 ```
 
-There is intentionally no placeholder resolver, semantic checker, or emitter.
-The parser contains no name, type, schema, effect, lowering, or emission logic.
-Each later module arrives with the milestone that owns executable behavior.
+The CLI exposes this pipeline through `check`, `build`, and `emit`; `tokens` and
+`ast` remain stable front-end inspection commands. Schema/query checking,
+governor effects, generated helpers, and runtime test execution have not been
+added speculatively. The parser still contains no name, type, lowering, or
+emission logic, and the emitter consumes validated Apex IR rather than syntax
+or HIR.
 
 ## Product and runtime boundary
 
@@ -97,9 +97,8 @@ Source management owns file identities, byte ranges, line/column mapping, and
 source text. Later project caching may add content identities, but compiler
 phases must never infer file ownership from concatenated offsets.
 
-The current `SourceMap::add` API assigns an identity to each loaded entry. M3
-project caching must retain one session-local identity for a canonical project
-path across reparses rather than allocating a new identity for every edit.
+The current `SourceMap::add` API retains one session-local identity when a path
+is reloaded. Durable project caches and content identities remain future work.
 
 ### Lexing
 
@@ -125,9 +124,11 @@ diagnostic codes, and inspection format are defined in
 
 ### Resolution and typing
 
-Resolution selects declarations independent of runtime values. Typing records
-the selected call/member, conversions, nullability, generic substitutions, and
-value category in HIR. Lowering must not repeat overload resolution.
+M3 resolution selects case-insensitive project and boundary declarations,
+locals, members, and exact-signature methods independent of runtime values.
+Typing records expression types, assignability, and selected call/member/index
+targets in HIR. Lowering does not repeat overload resolution. Future
+nullability, conversions, and custom generic substitutions remain owned here.
 
 Handwritten Apex declarations enter through explicit boundary declarations or
 a versioned semantic API index produced by a compatible Apex compiler. The
@@ -177,25 +178,26 @@ guarantees. Apex Exec can provide fast local feedback for its compatible
 surface through the boundary in `docs/APEX_EXEC.md`; Salesforce remains the
 final oracle for deployment behavior.
 
-Local user tests execute generated Apex rather than Zenith AST or HIR. This
-ensures the normal test loop exercises lowering, generated helpers, and target
-emission. Verification translates generated-file diagnostics, stack frames,
-and coverage through the build source map before reporting them to a Zenith
-developer.
+Future local user tests execute generated Apex rather than Zenith AST or HIR.
+This ensures the normal test loop exercises lowering, generated helpers, and
+target emission. Structured verification will translate generated-file
+diagnostics, stack frames, and coverage through the build source map before
+reporting them to a Zenith developer.
 
-The Apex Exec adapter uses a versioned machine-readable protocol rather than
-depending on compiler or runtime internals. Requests identify the generated
-project and target profile. Responses include backend and protocol versions,
-declared capabilities, structured diagnostics, test events, runtime frames,
-and coverage.
+The M3 Apex Exec adapter is deliberately narrower: it launches an explicitly
+selected executable, requires the pinned revision/profile, passes the generated
+SFDX project, and records exit status plus complete stdout/stderr. The
+machine-readable protocol, structured diagnostics, tests, frames, and coverage
+described by ADR 0004 remain M10 work.
 
-Every operation produces one of three outcomes:
+Every operation produces one of four outcomes:
 
 | Outcome | Meaning |
 |---|---|
 | Passed | The backend declares the required capability and the operation succeeded |
 | Unsupported | The backend cannot cover part of the emitted surface; the Zenith build remains valid and another backend is required |
 | Failed | The backend declares support and reports a compile, test, or runtime failure |
+| Internal error | The adapter could not launch or observe the backend reliably |
 
 Unsupported local verification must never be rendered as either a Zenith
 compile error or a passing test. The complete boundary is recorded in
@@ -247,23 +249,29 @@ and its trust boundary is recorded in
 | `lexer` | Recoverable source-to-token conversion |
 | `ast` | Immutable parsed declarations, types, statements, expressions, shared visitor, and stable rendering |
 | `parser` | Precedence, parsed-baseline grammar, localized recovery, and syntax diagnostics |
-| `lib` | Public compiler front-end façade |
-| `main` | CLI argument, source loading, and inspection behavior |
+| `project` | M3 configuration, deterministic discovery, parsing orchestration, and handwritten boundary loading |
+| `apex_api` | Small declaration-summary grammar for handwritten Apex signatures |
+| `types` | Canonical checked M3 types and assignability |
+| `check` | Cross-file symbols, scope/name/member/method resolution, type rules, and typed HIR construction |
+| `hir` | Checked declarations, expressions, and selected targets |
+| `lower` | Selection-preserving HIR-to-Apex-IR lowering |
+| `apex_ir` | Target-only declarations and expressions plus pre-emission validation |
+| `emit` | Deterministic Apex, metadata, source maps, manifests, and filesystem output |
+| `compiler` | Public project pipeline orchestration and phase gating |
+| `verify` | Backend-neutral results and the revision-pinned M3 process smoke |
+| `lib` | Public compiler façade |
+| `main` | CLI arguments, filesystem actions, and diagnostic/artifact rendering |
 
 ## Planned module boundaries
 
 | Module | Responsibility |
 |---|---|
-| `resolve` | Cross-file names, scopes, imports, and symbol identities |
-| `hir` / `types` | Checked expressions, declarations, conversions, and types |
 | `schema` / `query` | Salesforce metadata normalization and query shapes |
 | `effects` | Resource inference, contracts, and call-path diagnostics |
-| `lower` | Zenith-to-Apex semantic desugaring |
-| `apex_ir` / `emit` | Valid target representation, Apex text, companion metadata, and source-map segments |
-| `project` | Configuration, dependency graph, caching, output layout, and build manifests |
-| `apex_api` | Explicit or extracted declarations for handwritten Apex interoperability |
+| `resolve` | Stable declaration identities, imports, and dependency-aware incremental resolution beyond M3 |
+| `apex_api_index` | Extracted, versioned semantic declarations beyond handwritten M3 summaries |
 | `test_plan` | Branch goals, generated fixtures, oracle provenance, and candidate minimization |
-| `verify` | Versioned Apex Exec and Salesforce validation adapters |
+| `verify_protocol` | Structured Apex Exec and Salesforce validation adapters |
 
 Module names can evolve through implementation, but the ownership boundaries
 require an ADR to collapse.
@@ -318,43 +326,37 @@ assertions additionally retain their test-plan and oracle identities.
 
 ## Generated artifact layout
 
-The target layout is:
+The implemented M3 layout is:
 
 ```text
 .zenith/
+  sfdx-project.json
   generated/
-    force-app/main/default/classes/
+    main/default/classes/
       Example.cls
       Example.cls-meta.xml
-  test-candidates/
+  maps/
+    Example.cls.map.json
   build.json
-  source-map.json
-  verification.json
 ```
 
 Generated files are disposable build artifacts. Golden fixtures under `tests/`
-are the exception and exist specifically to review emitter behavior.
-`test-candidates/` contains non-deployable synthesis probes. An explicit adopt
-operation may create editable `.zen` drafts outside `.zenith/`; adopted files
-become developer-owned and are not overwritten.
+are the exception and exist specifically to review emitter behavior. Future
+test candidates and adopted drafts will require the ownership rules in the
+testing specification; M3 does not create them.
 
-`build.json` should record at least:
+M3 `build.json` records:
 
-- compiler version
+- format version
 - target Salesforce API version
-- configuration and schema fingerprints
-- input content identities
-- generated files and semantic owners
-- runtime-helper requirements, if any
-- compatibility profile
-- external verifier version, capability profile, and result when one ran
-- generated-test provenance and oracle class
-- required verification capabilities
+- the SFDX project path
+- sorted Zenith source paths
+- generated classes, metadata, and source maps
+- complete optional verifier revision/profile/outcome/status/stdout/stderr
 
-`verification.json` records the selected backend, protocol and backend
-versions, declared capability profile, result state, and any Salesforce
-differential evidence. A prior result is stale when its generated artifact,
-configuration, schema, or backend profile fingerprints no longer match.
+Configuration/schema fingerprints, content identities, runtime-helper
+requirements, generated-test provenance, and separate structured verification
+records arrive with the milestones that require them.
 
 ## Compatibility boundaries
 
@@ -371,10 +373,11 @@ Every shipped feature declares its class in `docs/COMPATIBILITY.md`.
 ## Apex Exec boundary
 
 Apex Exec is a separate local Apex runtime and an optional verification backend,
-not a Zenith compiler phase or source-language dependency. M3 may use a pinned
-compile smoke check after emission. Rich source-mapped test integration waits
-for the versioned protocol required by M10 and ADR 0004. Backend unsupported
-results remain visible and never become compiler success.
+not a Zenith compiler phase or source-language dependency. M3 implements a
+pinned compile smoke after emission through an explicit CLI flag. Rich
+source-mapped test integration waits for the versioned protocol required by M10
+and ADR 0004. Backend unsupported results remain visible and never become
+compiler success.
 
 Verification backends are not a fifth lowering class. They consume emitted
 Apex and cannot make an otherwise unsupported lowering acceptable.

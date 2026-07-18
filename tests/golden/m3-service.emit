@@ -1,0 +1,102 @@
+== build.json ==
+{
+  "formatVersion": 1,
+  "salesforceApiVersion": "65.0",
+  "sfdxProject": "sfdx-project.json",
+  "sources": ["src/GreetingService.zen", "src/MessageFormatter.zen"],
+  "classes": [
+    {"name": "GreetingService", "apex": "generated/main/default/classes/GreetingService.cls", "metadata": "generated/main/default/classes/GreetingService.cls-meta.xml", "sourceMap": "maps/GreetingService.cls.map.json"},
+    {"name": "MessageFormatter", "apex": "generated/main/default/classes/MessageFormatter.cls", "metadata": "generated/main/default/classes/MessageFormatter.cls-meta.xml", "sourceMap": "maps/MessageFormatter.cls.map.json"}
+  ],
+  "verification": []
+}
+== generated/main/default/classes/GreetingService.cls ==
+public class GreetingService {
+    private static final String EMPTY_MESSAGE = 'Nobody to greet';
+
+    public String LastGreeting {
+        get;
+        private set;
+    }
+
+    public static String greet(List<String> names) {
+        if (names.isEmpty()) {
+            Audit.write(EMPTY_MESSAGE);
+            return EMPTY_MESSAGE;
+        }
+        String greeting = MessageFormatter.decorate(names[0]);
+        Audit.write(greeting);
+        return greeting;
+    }
+}
+== generated/main/default/classes/GreetingService.cls-meta.xml ==
+<?xml version="1.0" encoding="UTF-8"?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <status>Active</status>
+</ApexClass>
+== generated/main/default/classes/MessageFormatter.cls ==
+public class MessageFormatter {
+    public static String decorate(String value) {
+        return '[' + value + ']';
+    }
+}
+== generated/main/default/classes/MessageFormatter.cls-meta.xml ==
+<?xml version="1.0" encoding="UTF-8"?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <status>Active</status>
+</ApexClass>
+== maps/GreetingService.cls.map.json ==
+{
+  "version": 1,
+  "generated": "generated/main/default/classes/GreetingService.cls",
+  "source": "src/GreetingService.zen",
+  "segments": [
+    {"generated": [13, 28], "source": [0, 448]},
+    {"generated": [63, 76], "source": [35, 97]},
+    {"generated": [79, 96], "source": [79, 96]},
+    {"generated": [117, 129], "source": [103, 151]},
+    {"generated": [140, 143], "source": [132, 136]},
+    {"generated": [161, 164], "source": [137, 149]},
+    {"generated": [198, 203], "source": [157, 446]},
+    {"generated": [217, 222], "source": [184, 202]},
+    {"generated": [238, 243], "source": [218, 223]},
+    {"generated": [244, 251], "source": [218, 233]},
+    {"generated": [269, 274], "source": [249, 254]},
+    {"generated": [275, 280], "source": [249, 275]},
+    {"generated": [281, 294], "source": [261, 274]},
+    {"generated": [316, 329], "source": [296, 309]},
+    {"generated": [356, 364], "source": [330, 384]},
+    {"generated": [367, 383], "source": [348, 364]},
+    {"generated": [384, 392], "source": [348, 383]},
+    {"generated": [393, 398], "source": [374, 379]},
+    {"generated": [399, 400], "source": [380, 381]},
+    {"generated": [412, 417], "source": [393, 398]},
+    {"generated": [418, 423], "source": [393, 414]},
+    {"generated": [424, 432], "source": [405, 413]},
+    {"generated": [450, 458], "source": [431, 439]}
+  ]
+}
+== maps/MessageFormatter.cls.map.json ==
+{
+  "version": 1,
+  "generated": "generated/main/default/classes/MessageFormatter.cls",
+  "source": "src/MessageFormatter.zen",
+  "segments": [
+    {"generated": [13, 29], "source": [0, 123]},
+    {"generated": [57, 65], "source": [36, 121]},
+    {"generated": [73, 78], "source": [66, 78]},
+    {"generated": [97, 100], "source": [97, 100]},
+    {"generated": [103, 108], "source": [103, 108]},
+    {"generated": [111, 114], "source": [111, 114]}
+  ]
+}
+== sfdx-project.json ==
+{
+  "packageDirectories": [
+    {"path": "generated", "default": true},
+    {"path": "../handwritten"}
+  ],
+  "sourceApiVersion": "65.0"
+}
