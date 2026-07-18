@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// A 1-based line and Unicode-scalar column in a source file.
@@ -171,6 +172,7 @@ impl SourceFile {
 #[derive(Clone, Debug, Default)]
 pub struct SourceMap {
     files: Vec<SourceFile>,
+    paths: BTreeMap<PathBuf, SourceId>,
 }
 
 impl SourceMap {
@@ -179,13 +181,20 @@ impl SourceMap {
     }
 
     pub fn add(&mut self, path: impl Into<PathBuf>, text: impl Into<String>) -> SourceId {
+        let path = path.into();
+        let text = text.into();
+        if let Some(id) = self.paths.get(&path).copied() {
+            self.files[id.raw() as usize].text = text;
+            return id;
+        }
         let raw = u32::try_from(self.files.len()).expect("source map exhausted u32 identities");
         let id = SourceId::from_raw(raw);
         self.files.push(SourceFile {
             id,
-            path: path.into(),
-            text: text.into(),
+            path: path.clone(),
+            text,
         });
+        self.paths.insert(path, id);
         id
     }
 
@@ -218,6 +227,17 @@ mod tests {
             sources.get(first).unwrap().path().to_str(),
             Some("first.zen")
         );
+    }
+
+    #[test]
+    fn retains_path_identity_when_source_text_is_reloaded() {
+        let mut sources = SourceMap::new();
+        let first = sources.add("first.zen", "old");
+        let reloaded = sources.add("first.zen", "new");
+
+        assert_eq!(first, reloaded);
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources.get(first).unwrap().text(), "new");
     }
 
     #[test]

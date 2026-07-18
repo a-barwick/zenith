@@ -16,12 +16,15 @@ salesforce-api-version = "65.0"
 source-root = "src"
 output-root = ".zenith"
 apex-boundary = "apex-boundary.api"
+apex-source-root = "handwritten"
 ```
 
 `salesforce-api-version` is required and must be an integer API version followed
 by `.0`. The other keys are optional and default to the values shown, except
-`apex-boundary`, which has no default. Unknown, duplicate, malformed, absolute,
-or parent-traversing paths are project errors.
+`apex-boundary` and `apex-source-root`, which have no defaults. Unknown,
+duplicate, malformed, absolute, or parent-traversing paths are project errors.
+`apex-source-root` identifies an existing SFDX package directory containing the
+handwritten Apex implementations summarized by `apex-boundary`.
 
 The compiler recursively discovers `.zen` files beneath `source-root`, sorts
 them by normalized project-relative path, and requires at least one source
@@ -36,13 +39,17 @@ use the current directory:
 ```text
 zenith check [project]
 zenith build [project]
+zenith build [project] --verify-apex-exec <executable>
 zenith emit [project]
 ```
 
 `check` performs discovery, parsing, declaration collection, type checking,
 lowering, and Apex IR validation without writing output. `emit` performs the
 same work and prints every generated artifact in path order without writing.
-`build` writes the artifact set beneath `output-root`.
+`build` writes the artifact set beneath `output-root`. The optional
+`--verify-apex-exec` form runs the pinned M3 smoke profile after writing the
+generated SFDX project and records the result in `build.json`; ordinary checking
+and building never require that executable.
 
 ## Handwritten Apex boundary summaries
 
@@ -51,7 +58,7 @@ declaration-only summaries:
 
 ```text
 class Audit {
-  static void record(String message);
+  static void write(String message);
 }
 ```
 
@@ -86,10 +93,15 @@ Primitive aliases are canonicalized for type equality and emitted using
 interfaces, safe navigation, constructors, and user-defined generic types are
 reserved for later milestones and rejected explicitly.
 
-Each class may contain fields, automatic properties, and methods. M3 accepts
-`public`, `private`, `protected`, `global`, `static`, `final`, `virtual`,
-`override`, and one sharing modifier where Apex permits their direct emission.
-Illegal, duplicate, or contradictory modifiers are rejected.
+Each class may contain fields, automatic properties, and methods. Top-level
+classes may be `public` or `global`, optionally `abstract`, `virtual`, `final`,
+or have one sharing modifier. Fields and methods support Apex visibility;
+`static` and `final` are accepted where valid, and a `virtual` method requires
+a `virtual` or `abstract` class. Automatic properties require `get` and may
+have an optional `set`; M3 supports a `private` or `protected` restriction on
+that setter. Inheritance and therefore `override` remain unsupported. Illegal,
+duplicate, contradictory, or inaccessible declarations are rejected before
+emission.
 
 Names resolve case-insensitively. Local variables and parameters shadow fields;
 duplicate names in the same scope are rejected. A bare field reference and
@@ -101,14 +113,15 @@ arity and exact parameter-type matching, with duplicate signatures rejected.
 It supports project methods, summarized boundary methods, and these collection
 members:
 
-- `List<T>.size() -> Integer`, `isEmpty() -> Boolean`, `add(T) -> Boolean`,
+- `List<T>.size() -> Integer`, `isEmpty() -> Boolean`, `add(T) -> Void`,
   and `get(Integer) -> T`
 - `Set<T>.size() -> Integer`, `isEmpty() -> Boolean`, `add(T) -> Boolean`,
   and `contains(T) -> Boolean`
 - `Map<K, V>.size() -> Integer`, `isEmpty() -> Boolean`, `get(K) -> V`,
   `put(K, V) -> V`, and `containsKey(K) -> Boolean`
 
-Indexing is supported for `List<T>[Integer] -> T` and `Map<K, V>[K] -> V`.
+Indexing is supported for `List<T>[Integer] -> T`. Map bracket indexing is
+rejected in M3; use `Map<K, V>.get(K) -> V` and `put(K, V) -> V`.
 
 ## Expressions and statements
 
@@ -140,9 +153,9 @@ resolution.
 
 Lowering produces a distinct Apex IR containing only validated target
 constructs. The Apex emitter accepts Apex IR, not source AST or HIR. Generated
-names use a reserved `Zenith$` prefix; M3 rejects user or boundary declarations
-with that prefix case-insensitively even though the baseline does not yet need
-helpers.
+names use a reserved `ZenithGenerated_` prefix; M3 rejects user or boundary
+declarations with that prefix case-insensitively even though the baseline does
+not yet need helpers.
 
 ## Output contract
 
@@ -154,7 +167,10 @@ For each class `Name`, M3 emits:
 <output-root>/maps/Name.cls.map.json
 ```
 
-It also emits `<output-root>/build.json`. Class text uses four-space
+It also emits `<output-root>/build.json` and an SFDX
+`<output-root>/sfdx-project.json`. The latter declares `generated` as its
+default package directory and includes the configured handwritten Apex source
+root when present. Class text uses four-space
 indentation, LF line endings, one declaration or statement per line, a final
 newline, and stable source spelling. Metadata is:
 

@@ -2,7 +2,7 @@
 /target/
 
 # Zenith generated output
-/.zenith/
+.zenith/
 
 # Editor and operating-system metadata
 .DS_Store

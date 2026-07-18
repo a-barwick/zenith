@@ -1,16 +1,16 @@
-public with sharing class GreetingService {
+public class GreetingService {
     private static final String EMPTY_MESSAGE = 'Nobody to greet';
 
     public String LastGreeting { get; private set; }
 
     public static String greet(List<String> names) {
         if (names.isEmpty()) {
-            Audit.record(EMPTY_MESSAGE);
+            Audit.write(EMPTY_MESSAGE);
             return EMPTY_MESSAGE;
         }
 
         String greeting = MessageFormatter.decorate(names[0]);
-        Audit.record(greeting);
+        Audit.write(greeting);
         return greeting;
     }
 }

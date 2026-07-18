@@ -13,10 +13,17 @@ Usage:
   zenith --version
   zenith tokens <file.zen>
   zenith ast <file.zen>
+  zenith check [project]
+  zenith build [project]
+  zenith build [project] --verify-apex-exec <executable>
+  zenith emit [project]
 
 Commands:
   tokens    Print the stable lexical token stream for one source file.
   ast       Print the stable parsed syntax tree for one source file.
+  check     Check a Zenith project without writing generated files.
+  build     Check and write deterministic SFDX-compatible Apex.
+  emit      Check and print generated artifacts without writing them.
 ";
 
 fn zenith() -> Command {
@@ -46,6 +53,35 @@ impl TempSource {
 impl Drop for TempSource {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.0);
+    }
+}
+
+struct TempProject(PathBuf);
+
+impl TempProject {
+    fn new(source: &str) -> Self {
+        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+        let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+        let root =
+            std::env::temp_dir().join(format!("zenith-cli-project-{}-{id}", std::process::id()));
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(
+            root.join("zenith.toml"),
+            "salesforce-api-version = \"65.0\"\n",
+        )
+        .unwrap();
+        fs::write(root.join("src/Main.zen"), source).unwrap();
+        Self(root)
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TempProject {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
     }
 }
 
@@ -82,13 +118,13 @@ fn prints_version_for_every_supported_alias() {
 
 #[test]
 fn reports_unavailable_commands_explicitly() {
-    let output = zenith().arg("check").output().expect("run zenith binary");
+    let output = zenith().arg("verify").output().expect("run zenith binary");
 
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
-        "error: unknown or unavailable command `check`\n\
+        "error: unknown or unavailable command `verify`\n\
 Run `zenith --help` for the available command surface.\n"
     );
 }
@@ -351,4 +387,139 @@ fn reports_missing_files_as_source_diagnostics() {
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.starts_with("error[source.read-failed]: failed to read `"));
     assert!(stderr.contains("  = note: "));
+}
+
+#[test]
+fn checks_and_emits_the_m3_acceptance_project() {
+    let project = fixture("examples/m3-service");
+    let checked = zenith()
+        .arg("check")
+        .arg(&project)
+        .output()
+        .expect("check M3 project");
+    assert!(checked.status.success());
+    assert_eq!(
+        String::from_utf8(checked.stdout).unwrap(),
+        "Checked 2 classes.\n"
+    );
+    assert!(checked.stderr.is_empty());
+
+    let emitted = zenith()
+        .arg("emit")
+        .arg(&project)
+        .output()
+        .expect("emit M3 project");
+    assert!(emitted.status.success());
+    assert_eq!(
+        String::from_utf8(emitted.stdout).unwrap(),
+        fs::read_to_string(fixture("tests/golden/m3-service.emit")).unwrap()
+    );
+    assert!(emitted.stderr.is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn build_writes_artifacts_and_records_optional_verification() {
+    let project =
+        TempProject::new("public class Main { public static String value() { return 'ok'; } }");
+    let output = zenith()
+        .arg("build")
+        .arg(project.path())
+        .arg("--verify-apex-exec")
+        .arg("/usr/bin/true")
+        .output()
+        .expect("build and verify M3 project");
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.starts_with(
+        "Apex verification: passed (apex-exec, revision \
+         1e4f1ca1938abfc996651ae447f227e0db680b6a, profile zenith-m3-apex-baseline).\n"
+    ));
+    assert!(stdout.contains("Built 1 classes to "));
+    assert!(output.stderr.is_empty());
+
+    let manifest = fs::read_to_string(project.path().join(".zenith/build.json")).unwrap();
+    assert!(manifest.contains("\"outcome\": \"passed\""));
+    assert!(manifest.contains("\"exitStatus\": 0"));
+    assert!(
+        project
+            .path()
+            .join(".zenith/generated/main/default/classes/Main.cls")
+            .is_file()
+    );
+    assert!(project.path().join(".zenith/sfdx-project.json").is_file());
+}
+
+#[test]
+fn unavailable_verifier_is_evidence_not_a_build_failure() {
+    let project = TempProject::new("public class Main {}");
+    let output = zenith()
+        .arg("build")
+        .arg(project.path())
+        .arg("--verify-apex-exec")
+        .arg("definitely-not-a-real-zenith-verifier")
+        .output()
+        .expect("build with unavailable verifier");
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .starts_with("Apex verification: unsupported")
+    );
+    assert!(output.stderr.is_empty());
+    assert!(
+        fs::read_to_string(project.path().join(".zenith/build.json"))
+            .unwrap()
+            .contains("\"outcome\": \"unsupported\"")
+    );
+}
+
+#[test]
+fn project_compilation_failures_use_status_one_and_write_nothing() {
+    let project =
+        TempProject::new("public class Main { public static String value() { return Missing; } }");
+    let output = zenith()
+        .arg("build")
+        .arg(project.path())
+        .output()
+        .expect("build invalid M3 project");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(
+        String::from_utf8(output.stderr)
+            .unwrap()
+            .contains("error[resolve.unknown-name]")
+    );
+    assert!(!project.path().join(".zenith").exists());
+}
+
+#[test]
+fn project_commands_report_usage_errors_with_status_two() {
+    for command in ["check", "emit"] {
+        let output = zenith()
+            .arg(command)
+            .arg("one")
+            .arg("two")
+            .output()
+            .expect("run invalid project command");
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            format!("error: usage: zenith {command} [project]\n")
+        );
+    }
+
+    let output = zenith()
+        .arg("build")
+        .arg("one")
+        .arg("two")
+        .output()
+        .expect("run invalid build command");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "error: usage: zenith build [project]\n"
+    );
 }
