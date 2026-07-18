@@ -4,9 +4,9 @@
 
 ## Active milestone
 
-None. M3 — Typed Apex baseline and deterministic emission is complete. M4
-remains Planned until its acceptance fixture and safe-value/domain-type
-contracts are explicit enough to implement without guesswork.
+M4 — Safe values and domain types. Its source, checking, lowering, diagnostics,
+generated-helper mapping, and acceptance-fixture contracts are explicit in
+`docs/specifications/safe-values-domain-types.md`.
 
 ## Completed
 
@@ -43,10 +43,8 @@ contracts are explicit enough to implement without guesswork.
 
 ## Immediate target
 
-Specify the M4 acceptance fixture and the observable contracts for nullability,
-flow narrowing, immutable `let`, records, typed IDs, sealed results, and source
-mapping through any generated helper code. Do not mark M4 Active until that
-specification slice is executable and unambiguous.
+Implement the complete M4 vertical slice and executable acceptance fixture
+defined by `docs/specifications/safe-values-domain-types.md`.
 
 ## Known limitations
 
