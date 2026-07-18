@@ -13,9 +13,10 @@ M2 accepts this selected Apex-shaped declaration grammar:
 
 ```text
 compilation-unit  := class-declaration* EOF
-class-declaration := class-modifier* "class" identifier class-suffix* class-body
-class-suffix      := "extends" type
-                   | "implements" type ("," type)*
+class-declaration := class-modifier* "class" identifier
+                     ("extends" type)?
+                     ("implements" type ("," type)*)?
+                     class-body
 class-body        := "{" class-member* "}"
 ```
 
@@ -147,7 +148,9 @@ mutating syntax.
 ## Recovery and diagnostics
 
 The public parser result contains an optional compilation unit plus an ordered
-diagnostic list. Parsing is attempted only when lexing succeeded.
+diagnostic list. Parsing is attempted only when lexing succeeded and receives
+the complete lexical token stream, including EOF. An incomplete token stream is
+rejected without attempting partial parsing.
 
 M2 uses these stable diagnostic codes:
 
@@ -172,6 +175,9 @@ progress:
   boundary without consuming the next construct.
 - Balanced block, parenthesis, bracket, and generic delimiters prevent an inner
   error from consuming a containing declaration's closing brace.
+- A maximal-munch `>>` or `>>>` with more generic closers than the parsed type
+  requires produces a localized diagnostic; unmatched virtual closers never
+  escape type parsing or panic later parser phases.
 
 The parser may return a partial immutable tree with diagnostics so tooling can
 inspect recovered structure. Later semantic phases must not run for a source

@@ -59,13 +59,19 @@ until its acceptance fixture and checking/emission specifications are explicit.
   lexer tokens
 - Localized declaration, member, and statement recovery with stable parse
   diagnostics and recoverable partial trees
+- Context-sensitive syntactic lookahead that keeps enhanced `for` declarations
+  distinct from ordinary conditional expressions beginning with nullable-shaped
+  names
+- Panic-safe parser entry and generic-close recovery for incomplete public token
+  streams and surplus closers inside maximal-munch `>>`/`>>>` tokens
 - `zenith ast <file.zen>` with deterministic goldens for both M2 acceptance
   fixtures, lexical/parse gating, and explicit status 1/2 behavior
-- 54 passing Rust tests spanning source, diagnostics, lexing, parser shape and
-  purity, visitor traversal, recovery, CLI diagnostics, and five inspection
-  goldens, including the complete `examples/parsed-baseline.zen` surface
-- Instrumented `cargo llvm-cov --all-targets` coverage of 88.70% lines overall,
-  including 87.03% for the parser, 82.09% for the AST/renderer, 98.92% for the
+- 61 passing Rust tests spanning source, diagnostics, lexing, every M2 type,
+  modifier, operator and loop-header family, parser shape and purity, visitor
+  traversal, recovery, CLI diagnostics, and five inspection goldens, including
+  the complete `examples/parsed-baseline.zen` surface
+- Instrumented `cargo llvm-cov --all-targets` coverage of 90.60% lines overall,
+  including 90.81% for the parser, 83.31% for the AST/renderer, 98.92% for the
   CLI, and 98.88% for the lexer
 
 ## Immediate target
